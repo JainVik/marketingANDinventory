@@ -23,4 +23,6 @@ Folds HANDOVER.md, the v1 Final Cut (items 1–66) and the PostgreSQL decision i
 | `db/seed/smoke.sql` | **new** | Proves RLS isolation, idempotency, guarded transitions, counters, partitions, append-only |
 | `docs/07`, `08`, `12`, `Regulars — v1 Final Cut.txt`, `v1-dataMaking.txt` | untouched | |
 
+Decisions folded 5 Sep (late): refund default = original payment mode (01 #45, 05 §4.9); move table confirmed v1, merge v1.1 (01 §4, §6).
+
 Numbering note: `13-…` because `11` and `12` already exist. `HANDOVER.md` is now folded in; keep it only as history.

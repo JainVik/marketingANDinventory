@@ -84,7 +84,7 @@ A vendor (business) has one or more outlets (v1: exactly one; multi-outlet v2). 
 42. Coupons: owner-generated, flat / %, validity, total-uses + per-customer limits, applied before payment only.
 43. Complimentary item with reason.
 44. Payment-mode capture (cash / UPI / card); a bill may be settled in more than one mode.
-45. Refunds: back-to-source (gateway) / cash at counter (recorded) / adjust-replace — reason + who on every one. We never refund; the restaurant does.
+45. Refunds: back-to-source (gateway) / cash at counter (recorded) / adjust-replace — reason + who on every one. Default = the way it was paid (gateway → back to source, counter → cash); adjust-replace always offered. We never refund; the restaurant does.
 46. Day-close report + cash reconciliation.
 47. Discount and void-rate report.
 
@@ -130,7 +130,7 @@ A vendor (business) has one or more outlets (v1: exactly one; multi-outlet v2). 
 
 | Version | Items |
 |---|---|
-| **v1.1** | staff PIN on sensitive actions · staff logins/permissions · move + merge table · order modification after placing · split payment-mode entry at settlement UI · GSTR-1 export · happy-hour pricing · dine-in vs takeaway price lists · KOT routing + thermal printing (Android print-agent) · combos · credit notes · competitor-POS menu import · waiter-assist · abandoned-cart nudge · Google review routing (4–5★) · 2nd-visit nudge |
+| **v1.1** | staff PIN on sensitive actions · staff logins/permissions · merge table · order modification after placing · split payment-mode entry at settlement UI · GSTR-1 export · happy-hour pricing · dine-in vs takeaway price lists · KOT routing + thermal printing (Android print-agent) · combos · credit notes · competitor-POS menu import · waiter-assist · abandoned-cart nudge · Google review routing (4–5★) · 2nd-visit nudge |
 | **v1.5** | owner bot write actions (sold out / busy / price / item via WhatsApp with confirm; campaigns + bulk + refunds hand off to in-app preview) · Hinglish AI copy (human approval mandatory) · AI-suggested campaigns · churn ML replaces rules · pooled cross-tenant forecasting · smart send times · Meta Tech Provider → per-vendor WABA · points loyalty (replayable from events) |
 | **v2** | hotels (room QR + room tabs + during/post-stay funnel) · inventory · table booking · multi-outlet · group "pool" cart · full discovery · POS integrations |
 
@@ -140,4 +140,4 @@ Shared server-side cart · "bill vanishes if not sent on WhatsApp" · customer-s
 
 ## 6. Still open (decide before the module is built)
 
-Refund default per outlet type · offers-banner edge cases · move table (v1 or v1.1) · group-ordering validation (sit in 10 restaurants).
+Offers-banner edge cases · group-ordering validation (sit in 10 restaurants). *Decided 5 Sep: refund default = original payment mode; move table is v1 (item 35), merge is v1.1.*
