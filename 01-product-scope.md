@@ -1,10 +1,10 @@
-# 01 — Product Scope (MVP v1)
+# 01 — Product Scope (v1 Master Spec)
 
-> **Working name:** LocalServe (placeholder — rename globally when decided)
-> **One-liner:** A subscription-based, multi-tenant platform that gives independent cafes and small restaurants their own digital ordering storefront, live order management, and a WhatsApp-based customer-retention funnel — without them building an app.
-> **Launch strategy:** Single city at launch. Vendors pay a subscription; customers use it free.
+> **Working name:** RestroSarthi (codebase: Regulars / LocalServe)  
+> **One-liner:** A multi-tenant micro-POS, GST invoicing, QR table ordering, and automated WhatsApp retention platform for independent Indian cafes, bakeries, and QSRs — without them building an app or getting squeezed by aggregators.  
+> **Launch strategy:** Single city pilot. Vendors pay a flat subscription; customers use it free.
 
-This document defines WHAT v1 does. It deliberately excludes HOW (see `02-architecture.md`). Anything not listed under "In scope" is OUT of v1 — do not build it, do not scaffold for it beyond what section 6 allows.
+This document defines WHAT v1 does. It deliberately excludes HOW (see `02-architecture.md`). Anything not listed under "In scope" is OUT of v1.
 
 ---
 
@@ -12,103 +12,92 @@ This document defines WHAT v1 does. It deliberately excludes HOW (see `02-archit
 
 | Role | Description | Access surface |
 |---|---|---|
-| `customer` | End user who discovers vendors and places orders | Customer PWA |
-| `vendor_admin` | Owner of a cafe/restaurant (the tenant). Full control of their vendor account | Vendor dashboard |
-| `vendor_staff` | Employee added by vendor_admin. Can manage orders and stock toggles only — no catalog edits, no campaigns, no staff management, no settings | Vendor dashboard (restricted) |
+| `customer` | End user who scans QR, browses menu, places rounds, and tracks bills | Customer PWA (Mobile) |
+| `vendor_admin` | Cafe owner (the tenant). Full control over catalog, staff, payment settings, campaigns, and reports | Vendor dashboard & Order Desk |
+| `vendor_staff` | Employee added by vendor_admin. Can operate Order Desk (Table Grid, Orders Kanban, Walk-in Punch, Stock toggles) and perform Day Close. No catalog/campaign/settings access | Vendor dashboard (restricted) |
 | `super_admin` | Platform operator (us). Onboards/suspends vendors, manages subscriptions, moderates reviews, views platform metrics | Admin panel (minimal internal UI) |
 
-A single human may hold `customer` and `vendor_admin` accounts, but they are **separate identities** (different login flows). Do not merge them in v1.
+A single human may hold `customer` and `vendor_admin` accounts, but they are **separate identities** (different login flows).
+
+---
 
 ## 2. In Scope — v1 Modules
 
-### 2.1 Vendor onboarding & subscription
-- Super admin creates the vendor (tenant), sets city, plan, and subscription status (`trial`, `active`, `past_due`, `suspended`). **Billing collection itself is offline/manual in v1** — no payment gateway. The system only enforces the status.
-- `past_due`: dashboard shows warning banner, everything still works. `suspended`: vendor storefront hidden from customers, ordering disabled, dashboard read-only.
-- Vendor admin completes profile: name, logo, cover image, address, city, geo-coordinates, opening hours per weekday, FSSAI license number (optional field), contact phone.
-- Vendor can toggle the whole store `open` / `temporarily_closed` with one switch, independent of opening hours.
+### 2.1 Vendor Onboarding & Outlet Profile
+- Outlet profile: name, slug (`/v/{slug}`), logo, cover image, address, city, geo-coordinates, operating hours per weekday (supports midnight-crossing hours), GSTIN, and FSSAI license number.
+- Operational switches: 1-tap "Force Closed" switch and "Busy Mode" order throttle.
+- Practice Mode: Pre-configured test table to test order flows and thermal receipts without polluting live sales or firing live customer WhatsApp messages.
+- Super admin sets subscription status (`trial`, `active`, `past_due`, `suspended`). Billing collection is manual in v1. Suspended vendor: storefront hidden, ordering blocked, dashboard writes 403.
 
-### 2.2 Catalog & inventory (vendor dashboard)
-- CRUD: categories → items → variants (e.g., Small/Large) → add-ons (e.g., extra shot, toppings). Add-ons can be grouped with min/max selection rules.
-- Item fields: name, description, photo, base price, veg/non-veg flag, variants, add-on groups, prep-time estimate, sort order, `is_active`.
-- Stock state per item: `in_stock` | `out_of_stock` | `limited` (with a numeric `stock_count` that auto-decrements on order acceptance and auto-flips to `out_of_stock` at 0). See edge cases doc §3.
-- Bulk actions: toggle stock for many items; reorder items within a category.
+### 2.2 Table Management & QR Generation
+- Table list with cryptographically unguessable tokens (e.g. `Table 04` -> `/v/{slug}/t/{token}`).
+- Table grouping: Indoor, Outdoor, Terrace, Counter.
+- **Print-Ready QR Generation:** 1-click generation of a downloadable/printable PDF sheet of branded table cards with crisp QR codes and counter takeaway stands.
 
-### 2.3 Order management (vendor dashboard)
-- Live order board with new-order sound alert. States and allowed transitions (this is THE canonical state machine — every doc uses it):
+### 2.3 Catalog & AI Menu Builder (The Onboarding Moat)
+- **AI Photo/PDF OCR Extraction:** Upload paper menu photo or PDF -> AI vision extracts categories, items, prices, veg/non-veg tags into an editable staging grid for 1-click review and commit.
+- **Spreadsheet Import / Bulk Grid:** Standard Excel/CSV template import + bulk-edit grid (select many -> change price / tax / stock).
+- Catalog structure: Categories -> items -> embedded variants (Small/Large) -> add-on groups (with min/max rules).
+- Item fields: name, description, photo URL, base price (paise), GST rate (default 5%), veg/non-veg flag, prep time, bestseller badge, sort order, `isActive`.
+- Stock states: `in_stock`, `out_of_stock`, and `limited` (with atomic decrement and auto-flip to `out_of_stock` at 0). 1-tap availability toggle with optional "Auto-restore next morning".
+- **Live Phone Preview:** Interactive mobile simulator in the dashboard showing real-time diner view with validation warnings.
 
-```
-placed → accepted → preparing → ready → completed
-placed → rejected            (vendor, with reason)
-placed → cancelled           (customer, only while still 'placed')
-accepted/preparing → cancelled_by_vendor (vendor, with reason — e.g., item unavailable)
-```
+### 2.4 Table Sessions & Customer Ordering (Mobile PWA)
+- Instant access: scan table QR -> menu opens with table auto-attached (no login to browse).
+- Cart per phone, special cooking instructions (≤ 200 chars).
+- Phone-OTP on order placement (first-timer: phone + WhatsApp/SMS OTP + name + WhatsApp consent checkbox; returning diner: 1-tap).
+- **Table Sessions & Rounds:** Diners place rounds that stack onto the table's shared active tab. Multiple guests at the same table can submit rounds.
+- In-Session Table Services:
+  - **"Call Waiter" Button:** Triggers instant assistance alert on the Order Desk.
+  - **"Request Bill" Button:** Notifies cashier table is ready to settle; displays running itemized bill.
+- Takeaway / Counter Mode: Counter QR scan issues daily sequential token (e.g., `#A-14`) with live ready notifications.
 
-- No other transitions exist. Terminal states: `completed`, `rejected`, `cancelled`, `cancelled_by_vendor`.
-- Vendor sets an ETA when accepting (prefilled from item prep times).
-- Order types in v1: **pickup** and **dine-in** (table number entered by customer). ~~Delivery~~ is OUT of v1.
-- Payment in v1: **pay at counter** only. The order shows the total; settlement is offline. No payment states in the system beyond an optional vendor-side "mark as paid" checkbox for their own bookkeeping.
+### 2.5 Order Desk (Dual-Mode Staff POS)
+- **Live Table Floor Grid:** Real-time visual floor cards showing table states: *Empty*, *Occupied & Eating* (shows running tab ₹ total and seated duration), *Bill Requested*, and *Assistance Needed*.
+- **Live Orders Kanban:** Columns for *New Orders* (with loud persistent audio chime until accepted), *Preparing*, *Ready*, and *Completed*.
+- Order lifecycle actions: Accept with ETA, prepare, ready, served, reject/cancel with mandatory reason (restores limited stock).
+- **Staff Quick-Punch Billing:** Visual menu popup to punch walk-in counter orders or manual table rounds.
+- Table reassign tool & one-tap "Busy Mode" order throttle.
 
-### 2.4 Customer ordering (PWA)
-- Phone-number + OTP login (no passwords for customers). Profile: name, phone, birthday (optional, for the birthday funnel), WhatsApp opt-in consent (explicit checkbox, default OFF).
-- Discovery: list of vendors in the selected city; filter by open-now, veg; sort by rating. City selection is manual in v1 (with browser-geolocation as a convenience to preselect the nearest vendor / city — no full geo-search).
-- **QR deep-link is the primary entry point:** each vendor gets a QR (printed on tables/counter) that opens their storefront directly at `/v/{vendorSlug}`. Discovery browsing is secondary.
-- Storefront: menu with categories, item detail with variants/add-ons, cart (single-vendor cart — adding from a second vendor prompts to clear cart), order placement, live order status screen, order history, re-order button.
-- Cart price is re-validated server-side at placement — client-sent prices are never trusted.
+### 2.6 Billing, Invoicing & Settlement
+- **GST-Compliant Tax Invoices:** Sequential numbering per FY (e.g. `INV-2627-0042`), itemized CGST (2.5%), SGST (2.5%), round-off paise, voluntary tip, cafe GSTIN and FSSAI.
+- **Payment Collection & Recording:**
+  - *Counter Recording:* Staff records payment mode: Cash, UPI, or Card.
+  - *Direct Cafe Dynamic UPI QR:* Bill displays a dynamic UPI QR with cafe's VPA (`upi://pay?pa=...`) for instant, zero-commission payment.
+  - *Configurable Gateway:* Optional Razorpay keys allow automated in-app payment.
+- **Discounts & Coupons:** Owner-created coupon codes (e.g. `WELCOME10`, flat ₹ off) + staff counter discount tool (% or flat ₹) + complimentary items with reason.
+- **Receipts & Printing:**
+  - *WhatsApp E-Bill:* Instant digital bill sent via WhatsApp with link to tax invoice.
+  - *Browser Thermal Printing:* 1-click "Print Bill" or "Print KOT" via standard browser print formatted for 80mm/58mm thermal rolls.
+- **Day-End Close & Reconciliation:** Shift closure summary: gross/net sales, GST collected, payment mode totals, and physical cash drawer variance balancing (over/short).
 
-### 2.5 Verified reviews
-- Only a customer with a `completed` order at that vendor may review it: 1–5 stars + optional text, **one review per order**, editable for 24h after submission.
-- Vendor sees reviews and may post one public reply per review. Vendor cannot delete reviews; super_admin can hide a review (moderation) with a reason.
-- Vendor rating = mean of visible review stars, shown with count ("4.3 ★ · 128").
+### 2.7 WhatsApp Retention Funnel (GoKwik-Style WABA)
+- **WABA Architecture:** Cafes connect their own WhatsApp Business Account via Meta Embedded Signup / Cloud API, displaying their own verified brand name and isolating quality ratings.
+- **Per-Vendor Customer Graph:** Auto-built on every completed order/bill: name, masked phone, visit count, total spend, birthday, dynamic segments (`new`, `repeat`, `loyal`, `at_risk`).
+- **Core Automated Triggers (Default-On):**
+  1. *Post-first-visit thank you* with next-visit offer (sent 2h post completion).
+  2. *Birthday treat* (sent 08:00 AM IST morning of birthday).
+  3. *30-day Win-back* for at-risk regulars (max 1 per 45 days).
+- **Manual Segmented Campaigns:** Broadcast targeted offers to segments with pre-approved Meta templates.
+- **Frequency Caps & Opt-Out:** Max 2 marketing messages/week/customer. `STOP` reply revokes consent platform-wide immediately. Meta error 131049 handled cleanly as `skipped_meta_cap`.
+- **Attributed Revenue Ledger:** Dashboard tile proving exact rupees generated and orders driven by WhatsApp marketing.
 
-### 2.6 Customer retention & WhatsApp funnel
-- On every completed order the platform builds/updates a **per-vendor customer profile**: name, phone, order count, last order date, total spend, birthday (if shared), computed segment (`new` = 1 order, `repeat` = 2–4, `loyal` = 5+, `at_risk` = no order in 30 days, configurable per vendor).
-- **A vendor only ever sees profiles of customers who ordered from THEM.** Phone numbers are shown masked (`98•••••210`) in the dashboard; full numbers are never exportable in v1.
-- Messaging is **WhatsApp template messages via the official WhatsApp Business Platform (Meta Cloud API through a BSP)** — see architecture doc §7. No SMS in v1.
-- Automated triggers (vendor can enable/disable each, with a platform-set message template):
-  1. Birthday offer (sent morning of birthday, only if opted in).
-  2. Win-back (customer crosses `at_risk` threshold; max 1 win-back per customer per 45 days).
-  3. Post-first-order thank-you with a next-visit offer (sent a few hours after first `completed` order).
-- Manual campaigns: vendor picks a segment, picks an approved template, fills variables (offer text, validity date), schedules or sends. **Hard caps:** per-vendor daily message quota (plan-based), and a customer can be messaged max N times per week across all triggers+campaigns (platform config, default 2).
-- Every message requires prior customer opt-in; every template includes opt-out wording; opt-out (customer replies STOP or toggles in profile) is enforced platform-wide immediately.
+### 2.8 Verified Reviews & Smart Feedback Routing
+- Gated strictly to verified diners with a `completed` order/bill (1 review per bill, editable 24h).
+- **Smart Routing:**
+  - *4 or 5 Stars:* 1-tap deep link to cafe's Google Business Maps profile to drive SEO and organic footfall.
+  - *1, 2, or 3 Stars:* Captured as private feedback alerting owner dashboard to resolve grievances before public negative reviews.
 
-### 2.7 Funnel additions from market research (docs/07 §11, docs/08 §7)
+---
 
-In v1: **attributed-revenue ledger** on the vendor dashboard ("this platform made you ₹X this month" + per-campaign revenue/orders/reads — the SaaS-retention spine); **frequency-cap handling** (Meta error 131049 → `skipped` with reason `meta_frequency_cap`, shown honestly in campaign counts); **service-window-aware sending** (order-status templates sent inside the free 24h utility window when open); **wa.me chat-first QR variant** behind an experiment flag (opens the 72h free CTWA-style window and captures opt-in in one scan); vendor dashboard gets **order throttle ("busy mode")** alongside the existing ETA control.
+## 3. Explicitly OUT of v1 (Do Not Build)
 
-Queued for v1.1 (build-ready, not in v1): abandoned-cart/session recovery with the compressed ladder (~10 min → same-meal → next-mealtime; never multi-day discount ladders), one-tap reorder journey ("repeat your last order? → UPI link"), 2nd-visit nudge after first order, slow-day boost campaigns, points-based loyalty with fixed mechanics, Razorpay/UPI incl. WhatsApp in-chat payments, Meta Tech Provider migration to per-vendor WABAs.
-
-## 3. Core Flows (happy paths)
-
-1. **Order:** customer scans QR → storefront → adds items → login via OTP (if not already) → places order → vendor gets alert → accepts with ETA → preparing → ready → customer shows order code at counter, pays → vendor marks completed → customer nudged (in-app) to review.
-2. **Win-back:** cron marks customer `at_risk` → trigger enqueues WhatsApp template → customer taps link → lands on vendor storefront with offer banner → orders.
-3. **Onboarding:** super_admin creates vendor + admin user → vendor_admin logs in, builds catalog, prints QR from dashboard → goes live.
-
-## 4. Non-Functional Requirements (v1)
-
-- Production-grade from day one: this is not a throwaway prototype. All engineering rules in `CLAUDE.md` are binding.
-- Scale target v1: ~200 vendors, ~50k customers, ~5k orders/day, peak ~10 orders/sec platform-wide. Design for 10× that without re-architecture.
-- Vendor order board reflects new orders within 2s (real-time channel), customer status screen within 5s.
-- Mobile-first UI; PWA installable; storefront usable on low-end Android over 3G (bundle budget in architecture doc).
-- All money values in INR paise (integers). All timestamps stored UTC, displayed Asia/Kolkata.
-- Languages: English UI in v1; all user-facing strings go through an i18n layer from day one so Hindi can be added without refactoring.
-
-## 5. Explicitly OUT of v1 (do not build)
-
-- Online payments / Razorpay, refunds, settlements
-- Delivery logistics, rider tracking
-- Table booking / reservations
-- Multi-outlet vendors (1 vendor = 1 outlet in v1)
-- Customer-side native apps
-- Vendor self-signup (super_admin onboards manually)
-- Coupons/promo-code engine (offers in v1 are just message text; staff honors them at counter)
-- Loyalty points/wallet
-- SMS/email channels
-- Analytics dashboards beyond basic counters (orders today, revenue today, top items, repeat rate)
-- Multi-city per vendor; platform runs in multiple cities, each vendor belongs to exactly one
-
-## 6. Forward-compatibility rules (build for, don't build)
-
-- Every order carries `payment: { method: 'counter', status: 'not_applicable' }` so online payments can be added as new enum values, not a schema change.
-- Vendor schema has `outlets` designed as its own collection with `vendorId` even though v1 enforces exactly one.
-- Order has `fulfilmentType: 'pickup' | 'dine_in'` enum — `delivery` joins later.
-- Message-sending goes through a channel-agnostic `NotificationService` interface even though WhatsApp is the only v1 implementation.
+- Native raw ESC/POS hardware print driver / auto-cut integration (browser thermal print used instead).
+- Move / merge tables & customer-side split bill payments (deferred to v1.1).
+- White-label delivery logistics & rider tracking.
+- Table reservations / advance bookings.
+- Multi-outlet brand chaining (1 vendor = 1 outlet in v1).
+- Customer-side native iOS/Android apps (PWA only).
+- Deep raw ingredient recipe-level inventory depletion (item-level stock states used instead).
+- Customer points-based loyalty wallet (segmented rule-based retention used instead).
+- Petpooja / external POS bi-directional sync adapters.

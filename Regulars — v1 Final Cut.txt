@@ -1,0 +1,105 @@
+Regulars — v1 Final Cut
+Section 1 — Data Making
+
+A. Onboarding
+
+Self-signup (OTP) + demo-led + manual onboarding — all land in one wizard
+Outlet profile: name, address, type (cafe / dining / hotel-ready), hours, open–closed switch
+GST/FSSAI optional at signup, required before first invoice
+QR mode per outlet: order / pay-only / both
+First-run wizard with progress + "go live" checklist (menu + one QR + one test order = live)
+Practice mode: test table, orders don't hit kitchen or books
+Customer-list import (CSV → column map) + WhatsApp opt-in ask to imported numbers
+Payment gateway onboarding (restaurant is merchant of record) — skippable; pay-at-checkout works without it
+Export everything anytime; monthly plan, cancel anytime
+
+B. Menu
+
+Categories, items (name / desc / price / veg-nonveg / photo optional / GST rate), bestseller tag
+Variants + add-on groups (min/max)
+Availability toggle on the row, with auto-restore
+Bulk edit grid
+Import: photo (AI extract → review grid, low-confidence first) / PDF / Excel-CSV
+Re-photograph = diff update ("12 prices changed, 3 new, 2 gone — apply?")
+Live phone preview with warnings
+Offers banner (owner-written / day-wise / festive) shown atop the customer menu
+
+C. Tables & QR
+
+Table list, kind = table / room / counter, opaque token per table
+QR PDF sheet (free) + per-table reprint/regenerate; delivered standees as paid option
+Counter QR for takeaway → token number, ready notification, mark collected
+
+D. Customer (mobile)
+
+Scan → menu, table auto-attached, browse without login
+Item sheet, cart, instructions — cart is per-phone
+Place order → phone OTP (first-timer: name + consent) → accept-gate → pay prompt after acceptance
+Counter/takeaway orders: pay first
+Live status, order more (rounds), call waiter, request bill
+My bill: rounds, per-person attribution, pay whole table OR pay own items
+Cancellation request (shown only if outlet enables it) → owner decides
+Coupon code field at checkout
+First visit: e-bill on WhatsApp (the consent moment). Repeat: in-app bill + optional send
+Customer history across all Regulars outlets + add-to-home-screen prompt
+
+E. Order Desk (desktop)
+
+Live New / Preparing / Ready columns with table + customer badge (new / repeat / visit count)
+Loud persistent alert
+Accept + ETA / preparing / ready / complete / reject presets
+Staff order entry (table and no-table) — required for pay-only mode and walk-ins
+Reassign table, busy mode
+Owner-initiated cancel with reason; handle cancellation requests
+Table grid (empty / eating / needs-you) → table sheet with running total + settle
+Regulars Board panel: who's seated now, name, visit count, usual order
+Slow-order alert
+
+F. Billing
+
+Pay now (gateway, direct to restaurant's account) / pay at checkout (running tab) — default by outlet type
+GST invoice: CGST/SGST, GSTIN, FSSAI, sequential number per outlet per FY, round-off, voluntary tip line
+Coupons: owner-generated, flat / %, validity, total-uses + per-customer limits, applied before payment only
+Complimentary item with reason
+Payment mode capture (cash / UPI / card)
+Refunds: back-to-source / cash (recorded) / adjust-replace — reason + who
+Day-close report + cash reconciliation
+Discount and void rate report
+Section 2 — Marketing & Analysis
+Customer book: rule segments (new / repeat / loyal / at-risk), block customer
+Identity capture rate tile
+Lapsed wall: at-risk count + rupee value
+Automatic triggers: birthday (opt-in at OTP + WhatsApp follow-up), win-back, post-first-order thank-you
+Manual segmented campaigns with pre-written templates
+Dead-hour filler: detect empty hours → capped send to customers who visit then → measure
+Holdout on every campaign (20% control) → real lift shown
+Revenue ledger ("this brought back ₹X")
+Morning WhatsApp briefing to owner
+Menu conclusions: move up / kill / slowing the kitchen; never-ordered list
+Market-basket upsell suggestions
+Kitchen speed by hour/day
+Smart review routing: happy → Google ask, unhappy → private
+WhatsApp pipeline: queue, retries, DLQ, opt-in/STOP, quotas, caps, dedupe, 131049 handling
+Admin panel + foundations (auth, tenant isolation, sockets, events log, CI)
+Public Site (v1)
+10 pages — home, how it works, pricing, QR ordering, for cafes, for restaurants, demo, signup/login, contact, legal. Mega-menu with "coming soon" greyed.
+Free vs Paid
+
+Free forever: 1–47. Customer count visible.
+Paid: 48–60.
+
+Moved to v1.1
+
+Staff PIN on sensitive actions · staff logins/permissions · move + merge table · order modification after placing · split payment-mode entry at settlement · GSTR-1 export · happy-hour pricing · dine-in vs takeaway price lists · KOT routing + thermal printing · combos · credit notes · competitor-POS menu import · waiter-assist · abandoned-cart nudge · Google review routing
+
+v1.5
+
+Hinglish AI copy · AI-suggested campaigns · churn ML · pooled cross-tenant forecasting · smart send times · per-vendor WABA · points loyalty
+
+v2
+
+Hotels (room tabs) · inventory · table booking · multi-outlet · group "pool" cart · full discovery · POS integrations
+
+Dropped
+
+Shared cart · AI-generated dish photos · Zomato scraper · customer-side split payment · money through us · "AI predicts churn" as a v1 claim
