@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1240" width="2000" height="1240">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4A5666"/></marker><marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0E7C6B"/></marker><marker id="arrW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#C2410C"/></marker></defs>
+<rect x="0" y="0" width="2000" height="1240" rx="0" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0"/>
+<text x="40" y="44" font-size="26" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Regulars — system design (v1)</text>
+<text x="40" y="68" font-size="13" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">One monorepo · one image · two processes (api, worker) · one Postgres · Redis queues per fault domain · every third party behind an adapter, called only from the worker</text>
+<rect x="40" y="96" width="1240" height="560" rx="14" fill="#E3F3EF" stroke="#0E7C6B" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text x="56" y="118" font-size="12" fill="#0E7C6B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">FAULT DOMAIN 1–3 · ordering, real-time, ingress — the API touches only Postgres and Redis</text>
+<rect x="1300" y="96" width="660" height="560" rx="14" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text x="1316" y="118" font-size="12" fill="#4A5666" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">QUEUES · Redis / BullMQ — one queue per fault domain, own concurrency · rate limit · breaker · DLQ</text>
+<rect x="40" y="680" width="1920" height="520" rx="14" fill="#FDECE3" stroke="#C2410C" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text x="56" y="702" font-size="12" fill="#C2410C" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">FAULT DOMAIN 4–5 · outbound integrations, AI, analytics — separate process, separate memory; if this half dies, orders still flow</text>
+<rect x="70" y="140" width="270" height="64" rx="8" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1.5"/>
+<text x="82" y="162" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Customer PWA</text>
+<text x="82" y="180" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">scan → order → pay</text>
+<text x="82" y="196" font-size="11" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">/v/{slug}/t/{token}</text>
+<rect x="370" y="140" width="270" height="64" rx="8" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1.5"/>
+<text x="382" y="162" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Owner desktop</text>
+<text x="382" y="180" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">desk · tables · menu · reports</text>
+<text x="382" y="196" font-size="11" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Socket.IO room vendor:{id}</text>
+<rect x="670" y="140" width="270" height="64" rx="8" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1.5"/>
+<text x="682" y="162" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Admin panel</text>
+<text x="682" y="180" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">vendors · tools · agents · audit</text>
+<rect x="970" y="140" width="270" height="64" rx="8" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1.5"/>
+<text x="982" y="162" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Public site</text>
+<text x="982" y="180" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">10 pages · signup → wizard</text>
+<text x="982" y="196" font-size="11" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">static / CDN</text>
+<rect x="70" y="240" width="1170" height="44" rx="8" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1.5"/>
+<text x="82" y="262" font-size="13" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Caddy — TLS · reverse proxy · websocket pass-through · /webhooks/* path rules</text>
+<path d="M205 204 L205 238" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<path d="M505 204 L505 238" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<path d="M805 204 L805 238" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<path d="M1105 204 L1105 238" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="70" y="308" width="880" height="330" rx="10" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="2"/>
+<text x="82" y="330" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">apps/api — process 1 (HTTP + Socket.IO)</text>
+<text x="82" y="348" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Express 5 · requestId → auth → tenantContext → validate → controller → withTenant(tx) → service</text>
+<text x="86" y="372" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">modules/  (one tree, shared with the worker)</text>
+<rect x="86" y="384" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="134.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">auth</text>
+<rect x="190" y="384" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="238.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">vendors</text>
+<rect x="294" y="384" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="342.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">menu</text>
+<rect x="398" y="384" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="446.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">tables</text>
+<rect x="502" y="384" width="96" height="22" rx="11" fill="#E3F3EF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="550.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">sessions</text>
+<rect x="606" y="384" width="96" height="22" rx="11" fill="#E3F3EF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="654.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">orders</text>
+<rect x="710" y="384" width="96" height="22" rx="11" fill="#E3F3EF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="758.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">billing</text>
+<rect x="814" y="384" width="96" height="22" rx="11" fill="#E3F3EF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="862.0" y="399" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">payments</text>
+<rect x="86" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="134.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">customers</text>
+<rect x="190" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="238.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">reviews</text>
+<rect x="294" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="342.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">marketing</text>
+<rect x="398" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="446.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">insights</text>
+<rect x="502" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="550.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">whatsapp</text>
+<rect x="606" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="654.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">agents</text>
+<rect x="710" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="758.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">events</text>
+<rect x="814" y="414" width="96" height="22" rx="11" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="862.0" y="429" font-size="11.5" fill="#16202B" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">admin</text>
+<text x="86" y="462" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">adapters/ports  — NotificationService · PaymentProvider · LlmProvider · OcrProvider · StorageProvider (interfaces only; implementations live in the worker)</text>
+<rect x="86" y="478" width="420" height="44" rx="6" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="98" y="496" font-size="13" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Socket.IO  /vendor  /customer</text>
+<text x="98" y="514" font-size="11" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">emit after commit · 30-s polling fallback · Redis adapter only when > 1 replica</text>
+<rect x="520" y="478" width="414" height="44" rx="6" fill="#FDECE3" stroke="#C2410C" stroke-width="1.2"/>
+<text x="532" y="496" font-size="13" fill="#C2410C" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">webhooks/  thin ingress (≈30 ms)</text>
+<text x="532" y="514" font-size="10.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">verify → webhook_dedupe → webhook_events (raw) → 202. No parsing, no third-party calls.</text>
+<text x="86" y="552" font-size="11.5" fill="#0E7C6B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Critical path = ~6 statements, one transaction: lock session → guarded stock UPDATE → insert order + lines → session totals → INSERT app.events (outbox)</text>
+<text x="86" y="572" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Rules: services take tx, never import db · no third-party calls · statement_timeout 5 s · 23505 on idempotency key = replay</text>
+<text x="86" y="592" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Scale: 2 replicas at CPU > 60 % (env flag) · Fly/ECS with the same image at > 50 outlets</text>
+<text x="86" y="612" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Fault domain 2 (sockets) and 3 (ingress) are inside this process but never block domain 1 — no awaits on anything but Postgres</text>
+<path d="M610 284 L610 306" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="980" y="308" width="290" height="330" rx="10" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="2"/>
+<text x="992" y="330" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Supabase Postgres 16</text>
+<text x="992" y="348" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">system of record · API talks SQL over RLS</text>
+<text x="996" y="372" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">schema app · 55 tables, RLS on every vendor_id</text>
+<text x="996" y="392" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">schema ml · features, feedback</text>
+<text x="996" y="412" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">schema ops · counters, watermarks</text>
+<text x="996" y="432" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">roles: regulars_app (RLS) · worker (bypass) · ml (ro)</text>
+<text x="996" y="452" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">partitions: events · messages · webhook_events ·</text>
+<text x="996" y="472" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">   audit_logs · customer_features (monthly)</text>
+<text x="996" y="492" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">pgvector HNSW on document_chunks</text>
+<text x="996" y="512" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">app.events = transactional OUTBOX</text>
+<text x="996" y="532" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">pooler 6543 (SET LOCAL only) · direct 5432 (migrations, CDC)</text>
+<text x="996" y="552" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">PITR · read replica later · Storage for files</text>
+<text x="996" y="600" font-size="11.5" fill="#0E7C6B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Every business change writes app.events in the SAME transaction</text>
+<text x="996" y="620" font-size="11.5" fill="#0E7C6B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">→ workers read it by watermark (green arrow); jobs carry id + intent</text>
+<path d="M950 420 L978 420" stroke="#0E7C6B" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+<rect x="1330" y="140" width="600" height="100" rx="10" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1.5"/>
+<text x="1342" y="162" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Redis 7 — ephemeral by contract</text>
+<text x="1342" y="180" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">OTP hashes (5-min TTL) · rate-limit counters · BullMQ queues · Socket.IO adapter (later)</text>
+<text x="1346" y="196" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">If Redis is wiped: ordering unaffected; queued work replays from the app.events watermark; OTPs re-requested</text>
+<text x="1346" y="216" font-size="11" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Considered: Redis Streams (lower level) · RabbitMQ (another stateful service) · SQS (cloud lock-in) · pg-boss (revisit if Redis flakes)</text>
+<rect x="1330" y="262" width="600" height="32" rx="6" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="283" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">events</text>
+<text x="1440" y="283" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">outbox fan-out · ordered per tenant</text>
+<text x="1926" y="283" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">1/partition</text>
+<rect x="1330" y="300" width="600" height="32" rx="6" fill="#E3F3EF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="321" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">whatsapp</text>
+<text x="1440" y="321" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">OTP · e-bill · status · campaigns · triggers · briefing</text>
+<text x="1926" y="321" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">10 · Meta tier limiter · otp>utility>marketing</text>
+<rect x="1330" y="338" width="600" height="32" rx="6" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="359" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">webhooks</text>
+<text x="1440" y="359" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">normalise raw → messages / payments / conversations</text>
+<text x="1926" y="359" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">5</text>
+<rect x="1330" y="376" width="600" height="32" rx="6" fill="#F5EFDF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="397" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">payments</text>
+<text x="1440" y="397" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">refunds · pending reconcile (3 min) · settlement checks</text>
+<text x="1926" y="397" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">3 · breaker per provider · DLQ alerts</text>
+<rect x="1330" y="414" width="600" height="32" rx="6" fill="#ECE8F5" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="435" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">ai</text>
+<text x="1440" y="435" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">owner-bot turns · briefing text · re-embed · copy (v1.5)</text>
+<text x="1926" y="435" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">4 · per-vendor daily budget · 30-s timeout</text>
+<rect x="1330" y="452" width="600" height="32" rx="6" fill="#ECE8F5" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="473" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">ocr</text>
+<text x="1440" y="473" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">menu photo / PDF extraction</text>
+<text x="1926" y="473" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">2 · 60-s timeout</text>
+<rect x="1330" y="490" width="600" height="32" rx="6" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="511" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">exports</text>
+<text x="1440" y="511" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">vendor export zip · QR PDF · day-close PDF</text>
+<text x="1926" y="511" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">2 · memory-heavy</text>
+<rect x="1330" y="528" width="600" height="32" rx="6" fill="#E6EEF9" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="549" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">automations</text>
+<text x="1440" y="549" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">trigger eval · holdout · scheduling · attribution</text>
+<text x="1926" y="549" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">5 · idempotent by run key</text>
+<rect x="1330" y="566" width="600" height="32" rx="6" fill="#E6EEF9" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="587" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">features</text>
+<text x="1440" y="587" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">segments · ml.* features · dead hours · insights · CDC</text>
+<text x="1926" y="587" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">2 · 03:00–05:00 IST</text>
+<rect x="1330" y="604" width="600" height="32" rx="6" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1342" y="625" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">housekeeping</text>
+<text x="1440" y="625" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">partitions · dedupe cleanup · auto-expiry · audits</text>
+<text x="1926" y="625" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">1</text>
+<path d="M1270 470 L1328 470" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<path d="M1270 440 L1328 440" stroke="#0E7C6B" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+<rect x="70" y="724" width="900" height="430" rx="10" fill="#FFFFFF" stroke="#C2410C" stroke-width="2"/>
+<text x="82" y="746" font-size="15" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">apps/worker — process 2 (same image, node dist/worker.js --queues=…)</text>
+<text x="82" y="764" font-size="12" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">BullMQ consumers · crons (IST) · outbox reader · CDC export · calls the same modules/ services with asWorker()</text>
+<rect x="86" y="780" width="420" height="350" rx="8" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="98" y="802" font-size="14" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">worker  (core groups)</text>
+<text x="98" y="826" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">events → fan-out + Socket.IO emits</text>
+<text x="98" y="846" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">whatsapp → Meta Cloud API (breaker, rate limiter)</text>
+<text x="98" y="866" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">webhooks → normalise raw payloads</text>
+<text x="98" y="886" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">payments → gateway refunds / reconcile</text>
+<text x="98" y="906" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">automations → rules · holdout · attribution</text>
+<text x="98" y="926" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">housekeeping → partitions · cleanup · auto-expiry</text>
+<text x="98" y="946" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif"></text>
+<text x="98" y="966" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Restarts in ~3 s · DLQ per queue · idempotent handlers</text>
+<text x="98" y="986" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Redelivery = no-op (message_dedupe, run keys)</text>
+<rect x="526" y="780" width="428" height="350" rx="8" fill="#F4F6F8" stroke="#C9D1DA" stroke-width="1"/>
+<text x="538" y="802" font-size="14" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">worker-heavy  (first to get its own machine)</text>
+<text x="538" y="826" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">ai → LlmProvider: owner bot, briefing, RAG (pgvector)</text>
+<text x="538" y="846" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">ocr → vision model → menu_import_rows</text>
+<text x="538" y="866" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">exports → zip / PDF (memory-bound)</text>
+<text x="538" y="886" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">features → ml.customer_features, insights,</text>
+<text x="538" y="906" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">   dead hours, segments; CDC → parquet lake</text>
+<text x="538" y="926" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif"></text>
+<text x="538" y="946" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Own memory limit: an OCR leak kills this container,</text>
+<text x="538" y="966" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">the API heap is untouched.</text>
+<text x="538" y="986" font-size="12" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Per-vendor LLM cost budget enforced here.</text>
+<text x="86" y="1148" font-size="11.5" fill="#C2410C" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">adapters/ implementations wired here only: meta-whatsapp · razorpay · cashfree · llm · ocr · supabase-storage · stubs (local/test)</text>
+<path d="M1330 600 C 1200 600, 1100 690, 700 740" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="972.6" y="649" width="54.800000000000004" height="16" rx="3" fill="#FFFFFF" opacity="0.92"/>
+<text x="1000" y="661" font-size="11" fill="#4A5666" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">consume</text>
+<path d="M1330 640 C 1240 640, 1150 700, 900 760" stroke="#4A5666" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="1010" y="900" width="178" height="70" rx="8" fill="#FFFFFF" stroke="#0E7C6B" stroke-width="1.5"/>
+<text x="1022" y="922" font-size="12.5" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Meta WhatsApp Cloud API</text>
+<text x="1022" y="944" font-size="10.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">templates · statuses · inbound</text>
+<rect x="1200" y="900" width="178" height="70" rx="8" fill="#FFFFFF" stroke="#8A6D2E" stroke-width="1.5"/>
+<text x="1212" y="922" font-size="12.5" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Razorpay / Cashfree</text>
+<text x="1212" y="944" font-size="10.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">merchant of record · webhooks</text>
+<rect x="1390" y="900" width="178" height="70" rx="8" fill="#FFFFFF" stroke="#6B5B95" stroke-width="1.5"/>
+<text x="1402" y="922" font-size="12.5" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">LLM provider</text>
+<text x="1402" y="944" font-size="10.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">owner bot · briefing · copy</text>
+<rect x="1580" y="900" width="178" height="70" rx="8" fill="#FFFFFF" stroke="#6B5B95" stroke-width="1.5"/>
+<text x="1592" y="922" font-size="12.5" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Vision / OCR model</text>
+<text x="1592" y="944" font-size="10.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">menu photo → rows</text>
+<rect x="1770" y="900" width="178" height="70" rx="8" fill="#FFFFFF" stroke="#3B6FB6" stroke-width="1.5"/>
+<text x="1782" y="922" font-size="12.5" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Storage · Parquet lake</text>
+<text x="1782" y="944" font-size="10.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">photos · PDFs · exports · ML</text>
+<path d="M972 870 L972 878 L1940 878" stroke="#4A5666" stroke-width="1.6" fill="none"/>
+<path d="M1099 878 L1099 898" stroke="#0E7C6B" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<text x="1099" y="872" font-size="10.5" fill="#0E7C6B" text-anchor="middle" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">send (breaker · limiter)</text>
+<path d="M1289 878 L1289 898" stroke="#8A6D2E" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<text x="1289" y="872" font-size="10.5" fill="#8A6D2E" text-anchor="middle" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">refund · reconcile</text>
+<path d="M1479 878 L1479 898" stroke="#6B5B95" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<text x="1479" y="872" font-size="10.5" fill="#6B5B95" text-anchor="middle" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">LLM (budget, 30 s)</text>
+<path d="M1669 878 L1669 898" stroke="#6B5B95" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<text x="1669" y="872" font-size="10.5" fill="#6B5B95" text-anchor="middle" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">OCR (60 s)</text>
+<path d="M1859 878 L1859 898" stroke="#3B6FB6" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<text x="1859" y="872" font-size="10.5" fill="#3B6FB6" text-anchor="middle" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">files · parquet</text>
+<text x="972" y="866" font-size="10.5" fill="#8A96A3" text-anchor="end" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">adapters →</text>
+<path d="M1120 898 C 1120 800, 950 690, 760 522" stroke="#C2410C" stroke-width="1.6" fill="none" marker-end="url(#arr)" stroke-dasharray="6 5"/>
+<rect x="1022.6" y="679" width="214.8" height="16" rx="3" fill="#FFFFFF" opacity="0.92"/>
+<text x="1130" y="691" font-size="11" fill="#C2410C" text-anchor="middle" font-weight="500" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">webhooks (signed) → thin ingress</text>
+<path d="M1310 898 C 1310 810, 1020 700, 800 522" stroke="#C2410C" stroke-width="1.6" fill="none" marker-end="url(#arr)" stroke-dasharray="6 5"/>
+<text x="1010" y="1000" font-size="11" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">CDC: append-only tables by id watermark · mutable tables by logical replication (pgoutput) · PII stripped at the boundary</text>
+<text x="1010" y="1020" font-size="11" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">ML reads the lake for training and ml.customer_features for serving — same pipeline_version, no skew</text>
+<text x="1010" y="1060" font-size="11.5" fill="#16202B" text-anchor="start" font-weight="600" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Extraction path (≤ 2 h): copy modules/whatsapp into apps/whatsapp-service · tables SET SCHEMA whatsapp · port impl becomes an HTTP client · Caddy path rule.</text>
+<text x="1010" y="1080" font-size="11.5" fill="#16202B" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">orders / billing / customers never change. Same recipe for agents when LLM traffic dominates.</text>
+<text x="1010" y="1120" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Deploy: Docker Compose on one Mumbai VPS (caddy · api · worker · worker-heavy · redis) + Supabase + static CDN → same images on Fly.io / ECS at > 50 outlets.</text>
+<text x="1010" y="1140" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Not on the roadmap: Kubernetes, microservices-by-default, a second write database, serverless for api/worker, GraphQL.</text>
+<rect x="1560" y="724" width="380" height="150" rx="8" fill="#FFFFFF" stroke="#C9D1DA" stroke-width="1"/>
+<text x="1576" y="746" font-size="13" fill="#16202B" text-anchor="start" font-weight="700" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">Legend</text>
+<path d="M1576 766 L1616 766" stroke="#0E7C6B" stroke-width="2.2" marker-end="url(#arrA)"/>
+<text x="1626" y="770" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">critical path / outbox (Postgres only)</text>
+<path d="M1576 790 L1616 790" stroke="#4A5666" stroke-width="1.6" marker-end="url(#arr)"/>
+<text x="1626" y="794" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">async job / queue</text>
+<path d="M1576 814 L1616 814" stroke="#C2410C" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#arrW)"/>
+<text x="1626" y="818" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">inbound webhook (write-and-202)</text>
+<rect x="1576" y="832" width="40" height="16" rx="4" fill="#E3F3EF" stroke="#0E7C6B" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="1626" y="845" font-size="11.5" fill="#4A5666" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif">fault domain boundary (own process / own queue)</text>
+<text x="1576" y="866" font-size="11" fill="#8A96A3" text-anchor="start" font-weight="400" font-family="Helvetica Neue, Helvetica, Arial, Liberation Sans, sans-serif" font-style="italic">Dashed boundaries = what can fail independently</text>
+</svg>

@@ -17,6 +17,8 @@ Folds HANDOVER.md, the v1 Final Cut (items 1–66) and the PostgreSQL decision i
 | `docs/10-backend-technical-roadmap.md` | **edit** | A2 stack + the MongoDB reversal rationale; A3 data stores; A6 data access = `withTenant(tx)` + RLS; B4/B7/B8/B10/B11/B13/B14/B15 rows; scaling path; glossary (transaction, guarded update, repository, RLS, outbox, partition, migration); decision record |
 | `docs/11-v1-master-feature-specification.md` | **edit** | Title → Regulars with "01 wins where they differ"; §1.1 DB and tenancy bullets |
 | `docs/13-website-and-onboarding-funnel.md` | **new** | 10 pages with CTAs, mega-menu, three doors → one wizard (10 steps, what each writes), go-live checklist, first-14-days sequence, funnel events |
+| `docs/14-screen-specification.md` | **new** | 112 screens (97 v1 + 15 reserved), 88 overlays, nav architecture, design-system inputs; companion `regulars-screen-inventory.xlsx` (not in repo) |
+| `docs/15-system-architecture-blueprint.md` + `15-system-design.png/.svg` | **new** | Monorepo (Turborepo), api + worker processes, 10 BullMQ queues by fault domain, outbox, adapters/ports, Docker Compose → Fly/ECS, 2-hour extraction recipe, directory tree |
 | `db/migrations/0001_init.sql` | **new** | The schema (65 tables, 65 enums, RLS, partitions, triggers). Includes the funnel event types from doc 13 |
 | `db/seed/smoke.sql` | **new** | Proves RLS isolation, idempotency, guarded transitions, counters, partitions, append-only |
 | `docs/07`, `08`, `12`, `Regulars — v1 Final Cut.txt`, `v1-dataMaking.txt` | untouched | |

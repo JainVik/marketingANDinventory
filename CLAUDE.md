@@ -11,6 +11,8 @@ You are writing production code for **Regulars**: a multi-tenant QR ordering + W
 | `docs/05-edge-cases-and-failures.md` | **Before implementing a module — its section is a requirements list** |
 | `docs/06-security-checklist.md` | Auth, input handling, anything vendor-scoped |
 | `docs/13-website-and-onboarding-funnel.md` | Public site, signup, wizard |
+| `docs/14-screen-specification.md` | Building any screen — IDs, layouts, overlays, states |
+| `docs/15-system-architecture-blueprint.md` | Adding a process, queue, adapter or module; anything about fault isolation or deployment |
 
 If a request conflicts with these docs, STOP and say so instead of silently diverging. If something is ambiguous, choose the option consistent with these docs and note the assumption in the PR description.
 

@@ -23,10 +23,13 @@ docs/
 ├── 10-backend-technical-roadmap.md← backend decisions + build order — BOTH
 ├── 11-v1-master-feature-specification.md ← long-form feature spec (01 wins where they differ)             [feed to AI]
 ├── 12-ux-wireframe-flow-map.md    ← screen flows & Mermaid maps                                          [feed to AI]
-└── 13-website-and-onboarding-funnel.md ← 10-page site, three signup doors, the wizard, go-live          [feed to AI]
+├── 13-website-and-onboarding-funnel.md ← 10-page site, three signup doors, the wizard, go-live          [feed to AI]
+├── 14-screen-specification.md     ← every screen, overlay and state; Figma planning                       [feed to AI]
+├── 15-system-architecture-blueprint.md ← repo, processes, queues, fault domains, deploy, extraction        [feed to AI]
+└── 15-system-design.png / .svg    ← the system diagram
 ```
 
-Docs 01–06, 11–13 + CLAUDE.md + `db/migrations` are the AI's binding contract. 07–09 are founder references (don't paste them into coding sessions). Doc 10 bridges both. Where 01 and 11 disagree, **01 (the final cut) wins**.
+Docs 01–06, 11–15 + CLAUDE.md + `db/migrations` are the AI's binding contract. 07–09 are founder references (don't paste them into coding sessions). Doc 10 bridges both. Where 01 and 11 disagree, **01 (the final cut) wins**.
 
 ## How to use with Claude Code
 
