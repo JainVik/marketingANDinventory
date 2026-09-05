@@ -22,12 +22,12 @@ The options, honestly:
 
 Criteria: (1) the team already knows it (we're MERN people — debugging unfamiliar tech during a pilot fire is how startups die), (2) AI codegen quality (Claude/Copilot write the most reliable code in mainstream TS/Node patterns), (3) hiring pool in India, (4) boring beats clever for a 3-person production system.
 
-Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · MongoDB 7 (Atlas, replica set) via Mongoose 8 · Zod · Redis 7 + BullMQ · Socket.IO · Vitest + Supertest · Docker Compose on a VPS + Caddy**. Alternatives we consciously rejected: NestJS (more framework ceremony than a 3-person team needs; our layering gives the same structure with less magic), Fastify (fine, but Express has the deepest AI-training-data + middleware ecosystem), Prisma+Postgres (we chose Mongo for team skill — the discipline cost is documented in docs/03), GraphQL (see A4).
+Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · PostgreSQL 16 on Supabase via Drizzle ORM (SQL migrations are truth) · Zod · Redis 7 + BullMQ · Socket.IO · Vitest + Supertest · Docker Compose on a VPS + Caddy**. Alternatives we consciously rejected: NestJS (more framework ceremony than a 3-person team needs), Fastify (fine, but Express has the deepest AI-training-data + middleware ecosystem), **MongoDB/Mongoose (our first choice, reversed 5 Sep 2026: the money/GST/holdout/attribution model is relational, RLS gives tenant isolation in the database instead of in code, and partitions + pgvector + logical replication cover the ledger/AI/ML needs without a second service)**, Prisma (can't express partitions/RLS/pgvector; Drizzle introspects what SQL defines), GraphQL (see A4).
 
 ### A3. Data stores — one source of truth, one accelerator
 
-- **MongoDB = the system of record.** Everything durable lives here. Non-negotiable requirement: **replica set** (Atlas default) because order placement uses multi-document transactions (docs/03 §10). Modeling rules live in docs/03; the three habits that keep Mongo honest: every vendor-scoped query filtered by `vendorId`, every contended write is a guarded atomic update (never read-then-write), every money value an integer.
-- **Redis = ephemeral accelerator, never a database.** Its four jobs here: (1) **queues** — BullMQ for WhatsApp sends, crons, retries; (2) **OTP store** — hashed codes with 5-min TTL; (3) **rate-limit counters**; (4) later, **cache** and the Socket.IO adapter for multi-instance scaling. The rule: **if Redis is wiped, the business must lose nothing durable** — only in-flight jobs (redelivered) and counters. Anything you're tempted to keep "just in Redis" belongs in Mongo.
+- **PostgreSQL = the system of record.** Everything durable lives here — including the event ledger, message ledger, feature store and vector embeddings (schemas `app`, `ml`, `ops`). Modeling rules live in docs/03; the three habits that keep it honest: every vendor request inside `withTenant()` (RLS does the filtering), every contended write a guarded `UPDATE … WHERE` / row lock (never select-then-update), every money value integer paise (`app.paise`).
+- **Redis = ephemeral accelerator, never a database.** Its four jobs here: (1) **queues** — BullMQ for WhatsApp sends, crons, retries; (2) **OTP store** — hashed codes with 5-min TTL; (3) **rate-limit counters**; (4) later, **cache** and the Socket.IO adapter for multi-instance scaling. The rule: **if Redis is wiped, the business must lose nothing durable** — only in-flight jobs (redelivered) and counters. Anything you're tempted to keep "just in Redis" belongs in Postgres.
 - **Object storage (S3-compatible)** for images via presigned uploads (docs/04 §8) — the API never proxies file bytes.
 
 ### A4. API style
@@ -46,8 +46,8 @@ Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · MongoDB 
 - **Route** — declares the path + middleware chain. Zero logic.
 - **Controller** — HTTP translator: parse (zod), call service, shape envelope. Never imports models.
 - **Service** — ALL business logic, pure of HTTP. Throws typed `AppError`s. This is the layer you unit-test.
-- **Model** — Mongoose schema + data access.
-- **Repository pattern?** A repository is an interface between services and the DB (`orderRepo.findByVendor(...)`) so you could swap databases or mock storage. Full repositories earn their keep in big teams/DDD codebases; for us they'd be a third name for every query. **Our decision: Mongoose models ARE the data layer, wrapped by one thin guard — `scopedModel(Model, vendorId)` — which force-injects the tenant filter** (docs/02 §4). That's the 20% of the repository pattern that pays (tenant safety, mockability) without the boilerplate. Revisit-when: a second data store appears, or query logic starts duplicating across services.
+- **Data** — Drizzle tables from `db/schema.ts` + queries; services receive a tenant-bound `tx`.
+- **Repository pattern?** Full repositories earn their keep in big teams/DDD codebases; for us they'd be a third name for every query. **Our decision: Drizzle IS the data layer; services take a tenant-bound `tx` from `withTenant()` and Postgres RLS enforces the tenant filter** (docs/02 §4). That's the 20 % of the repository pattern that pays (tenant safety, mockability — a `tx` is trivially faked) without the boilerplate. Revisit-when: query logic starts duplicating across services (then a `queries/` folder per module, still Drizzle).
 - **Cross-module traffic**: service→service calls for commands; **domain events** (in-process emitter) for side effects — `order.completed` → customers module updates the profile → campaigns module evaluates triggers. Handlers idempotent, failures logged, never crash the emitter. This is the seam that later becomes a message bus if we ever split services.
 
 ### A7. The middleware chain (fixed order, docs/02 §5)
@@ -63,20 +63,20 @@ Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · MongoDB 
 | B1 | **Scaffold**: monorepo workspaces, TS strict, ESLint (incl. custom rules: no `vendorId` from req in vendor modules, no `dangerouslySetInnerHTML`), Prettier, `packages/shared` with error codes + order-state machine + zod schemas | `npm run lint && npm run build` green in CI on PR #1 |
 | B2 | **Config**: `config/env.ts` — zod-parses ALL env vars at boot, app refuses to start on missing config; `.env.example` | Deleting any env var makes boot fail loudly (CI-tested) |
 | B3 | **Errors + logging**: `AppError`, `asyncHandler`, central error middleware, pino with requestId/vendorId/userId, PII redaction paths | Throwing anywhere returns the envelope; nothing leaks a stack trace |
-| B4 | **DB layer**: Mongoose connection with retry, `migrate-mongo` set up (indexes ONLY via migrations, autoIndex off in prod), seed script (2 cafes, menus, orders in every state) | `npm run seed:dev` gives a demoable database from zero |
-| B5 | **Middleware chain** wired in canonical order + `/healthz` `/readyz` | A request travels the full chain; readyz flips when Mongo/Redis drop |
+| B4 | **DB layer**: `db/migrations/0001_init.sql` applied (`drizzle-kit migrate` / psql), `drizzle-kit pull` generates `db/schema.ts`, `db/client.ts` with `withTenant()` / `asWorker()`, seed script (2 outlets, menus, orders in every state, tools registry, system automations), `db/seed/smoke.sql` green | `npm run db:reset && npm run seed:dev` gives a demoable database from zero, RLS on |
+| B5 | **Middleware chain** wired in canonical order + `/healthz` `/readyz` | A request travels the full chain; readyz flips when Postgres/Redis drop |
 | B6 | **Auth module** (it blocks everything else): OTP request/verify (Redis TTL, attempt caps), email+password login, refresh rotation + family revocation, `authorize()`, tenantContext | docs/05 §1 cases tested — expired/garbage tokens, OTP abuse, refresh reuse |
-| B7 | **Domain modules in dependency order**: vendors → catalog → public storefront reads → **orders** (transactions + guarded stock + idempotency — the hard one) → reviews → customers/segments → campaigns → admin. Each = the vertical-slice DoD from docs/09 §P4 | Per-module: docs/05 edge cases green + tenant-leak test added |
-| B8 | **Jobs**: BullMQ queues + the separate worker process, repeatable crons (birthday 08:00 IST, segments 03:00, win-back 03:30, order auto-expiry), dedupe keys, DLQ | Kill the worker mid-job → redelivery causes no double effect |
+| B7 | **Domain modules in dependency order**: vendors + wizard → menu → tables → sessions + **orders** (row lock + guarded stock + idempotency + auto-accept + outbox event — the hard one) → billing + payments (gateway adapters, refunds) → customers + consent → whatsapp (queue, worker, webhook, conversations) → marketing (automations, campaigns, holdout, ledger) → insights + briefing → agents (tools registry, owner bot read-only) → admin. Each = the vertical-slice DoD from docs/09 §P4 | Per-module: docs/05 edge cases green + tools entries seeded + leak matrix regenerated |
+| B8 | **Jobs**: BullMQ queues + the separate worker process; event consumers (outbox → automations / features / sockets); repeatable crons (birthday 08:00 IST, segments 03:00, win-back 03:30, dead-hours 04:00, briefing 08:00, order auto-expiry, partitions weekly); `message_dedupe` / `automation_runs.idempotency_key`; DLQ | Kill the worker mid-job → redelivery causes no double effect |
 | B9 | **Real-time**: Socket.IO namespaces, JWT handshake, room-join ownership checks, emit-after-commit, 30s polling reconciliation on clients | Vendor board updates <2s; socket death degrades to polling, invisibly |
-| B10 | **Integrations behind interfaces**: `NotificationService` → WhatsApp BSP adapter (wholesale rail first), webhook endpoint (signature-verified, 200-fast, process-async), payment interface stubbed for v1.1 | Swapping BSP = one adapter file; webhook replay is idempotent |
-| B11 | **Test hardening**: unit (services), integration (Supertest + mongodb-memory-server replica-set mode for transactions), the generated **tenant-leak matrix**, load smoke (50 concurrent orders on `limited` stock) | docs/06 §10 release gates green |
+| B10 | **Integrations behind interfaces**: `NotificationService` → WhatsApp Cloud API adapter (platform channel), `PaymentProvider` → Razorpay + Cashfree adapters (restaurant = merchant of record), `LlmProvider` → model adapter; webhook endpoints (signature-verified, dedupe table, raw stored, process-async) | Swapping a provider = one adapter file; webhook replay is idempotent |
+| B11 | **Test hardening**: unit (services with a fake `tx`), integration (Supertest + real Postgres via testcontainers/docker-compose, migrations applied, RLS on), the generated **tenant-leak matrix**, load smoke (50 concurrent orders on `limited` stock, 20 concurrent settles) | docs/06 §10 release gates green |
 | B12 | **Observability**: Sentry, log-based alerts (5xx spike, DLQ growth, webhook signature failures), uptime monitor | An induced staging error reaches the team group chat |
-| B13 | **Security pass**: run docs/06 top to bottom — mongo-sanitize, regex escaping, upload magic-byte checks, CORS allowlist, secrets scan in CI, dependency audit | Checklist signed off by the founder who didn't write the code |
-| B14 | **Performance sanity** (only now): verify every hot query hits an index (`explain()`), projection whitelists on public reads, THEN add caching only where measurement demands (menu reads are the likely first candidate — cache-aside with 60s TTL, invalidate on catalog write) | p95 latency known for the 5 hottest endpoints |
-| B15 | **Deploy pipeline**: Dockerfiles (non-root), compose (api + worker + redis + caddy), Atlas prod cluster (IP allowlist, least-privilege users), CI: test → build → migrate → deploy with graceful shutdown (drain in-flight ≤10s), rehearsed rollback | Deploy is one merged PR; rollback is one command; both rehearsed |
+| B13 | **Security pass**: run docs/06 top to bottom — `sql.raw` audit, RLS/pooler discipline, upload magic-byte checks, CORS allowlist, vault refs for gateway/WABA secrets, secrets scan in CI, dependency audit | Checklist signed off by the founder who didn't write the code |
+| B14 | **Performance sanity** (only now): `EXPLAIN (ANALYZE, BUFFERS)` on the 10 hottest queries (CI gate: no seq scan on tenant tables), partition pruning verified on events/messages, THEN caching only where measurement demands (public menu — cache-aside 60 s, invalidate on catalog write) | p95 latency known for the 5 hottest endpoints |
+| B15 | **Deploy pipeline**: Dockerfiles (non-root), compose (api + worker + redis + caddy), Supabase prod project (roles, pooler, PITR, pg_cron jobs), CI: test → build → migrate (direct URL) → deploy with graceful shutdown (drain in-flight ≤ 10 s), rehearsed rollback (migrations are forward-only + PITR) | Deploy is one merged PR; rollback is one command; both rehearsed |
 
-**Scaling path when the day comes** (in order, each step only when metrics demand): bigger VPS → API and worker on separate machines → 2+ API instances behind Caddy with the Socket.IO Redis adapter → read-heavy endpoints cached → Atlas tier up. Sharding, Kubernetes, and microservices are not on this list for years, if ever.
+**Scaling path when the day comes** (in order, each step only when metrics demand): bigger VPS → API and worker on separate machines → 2+ API instances behind Caddy with the Socket.IO Redis adapter → read-heavy endpoints cached → Supabase compute up → read replica for reports/ML → detach old partitions to the parquet lake. Sharding, Kubernetes, and microservices are not on this list for years, if ever.
 
 ---
 
@@ -84,11 +84,14 @@ Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · MongoDB 
 
 - **Middleware** — a function in the request pipeline (`(req,res,next)`): sees every request before the controller. Auth, rate limiting, validation, error handling are all middleware. Order matters.
 - **Controller vs Service** — controller speaks HTTP (parse, status codes); service speaks business ("place order", "compute segment"). The test: a service must be callable from a cron job or test with no `req`/`res` anywhere.
-- **Repository** — an abstraction over data access so business logic doesn't know the database. We use the thin version: `scopedModel` (tenant-guard) over raw Mongoose.
+- **Repository** — an abstraction over data access so business logic doesn't know the database. We use the thin version: a tenant-bound `tx` from `withTenant()` over Drizzle, with RLS as the guard.
+- **Row-Level Security (RLS)** — Postgres filters every row by a policy (`vendor_id = current tenant`) no matter what SQL the app sends. The tenant wall lives in the database.
+- **Outbox** — the `events` row written in the same transaction as the business change; workers read it afterwards. Guarantees a side effect is never fired for a change that rolled back.
+- **Partition** — one logical table stored as monthly physical tables (`events_2026_09`); old months detach to cheap storage.
 - **Modular monolith** — one deployable, hard internal module boundaries. Microservice discipline without the network.
 - **DTO / schema** — the declared shape of data crossing a boundary. Ours are zod schemas: one declaration = runtime validation + TS type.
-- **Transaction** — several DB writes that succeed or fail as one (order insert + stock decrement). Mongo needs a replica set for this.
-- **Guarded/atomic update** — write with the precondition inside the query (`{status:'placed'} → set 'accepted'`); `modifiedCount 0` means you lost the race. The cure for read-then-write bugs.
+- **Transaction** — several DB writes that succeed or fail as one (order insert + stock decrement + outbox event). Postgres: `BEGIN … COMMIT`; row locks (`FOR UPDATE`) serialise writers on the same session.
+- **Guarded/atomic update** — write with the precondition inside the query (`UPDATE … WHERE status = 'placed'`); `rowCount 0` means you lost the race. The cure for select-then-update bugs.
 - **Idempotency key** — client-generated UUID on a POST so a retry returns the original result instead of double-charging/double-ordering.
 - **Queue / worker / DLQ** — producer enqueues a job (Redis via BullMQ), a separate worker process executes with retries + exponential backoff; permanently failing jobs land in a dead-letter queue for humans.
 - **Cron (repeatable job)** — scheduled work (birthday scan). Must be idempotent: running twice sends nothing twice (dedupe keys).
@@ -96,9 +99,9 @@ Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · MongoDB 
 - **Cache-aside** — read cache → miss → read DB → write cache with TTL; invalidate on write. The only caching pattern we'll use, and only after measuring.
 - **JWT vs session** — session = server remembers you (state on server); JWT = signed claim you carry (state in token). We use short JWT + DB-backed refresh = mostly stateless with a revocation lever.
 - **RBAC** — role-based access control: what a `role` may do. Always paired with object-level ownership checks.
-- **Tenant isolation** — every vendor sees only their rows; enforced by JWT-derived `vendorId` in every query, proven by the leak-matrix tests.
+- **Tenant isolation** — every vendor sees only their rows; enforced by RLS keyed on the JWT-derived `vendorId`, proven by the generated leak-matrix tests.
 - **Rate limiting** — per-key request caps (Redis counters): brute-force and cost-attack defense. Fails closed on auth routes, open elsewhere.
-- **Migration** — versioned, ordered DB change scripts (indexes, backfills) run by CI, never by hand.
+- **Migration** — versioned, ordered SQL files in `db/migrations/` (tables, indexes, policies, backfills) run by CI with the direct DB URL, never by hand. `drizzle-kit pull` regenerates the TypeScript schema afterwards.
 - **Graceful shutdown** — on deploy: stop accepting, finish in-flight work, close connections, exit. Why deploys don't drop orders.
 - **Horizontal vs vertical scaling** — more machines vs bigger machine. Vertical first; horizontal needs the Redis socket adapter + statelessness we've already designed for.
 
@@ -109,12 +112,12 @@ Locked (docs/02 §1): **Node 22 LTS + TypeScript strict · Express 5 · MongoDB 
 | Decision | Choice | Revisit when |
 |---|---|---|
 | Architecture | Modular monolith, worker split from API | A module needs independent scale/team |
-| Stack | Node/TS/Express/Mongoose/Zod/BullMQ | Never mid-build; v2 with data |
-| Database | MongoDB Atlas (replica set) | Relational reporting pain dominates (then add a read store, don't migrate) |
+| Stack | Node/TS/Express/Drizzle/Zod/BullMQ | Never mid-build; v2 with data |
+| Database | PostgreSQL 16 on Supabase (reversed from MongoDB, 5 Sep 2026) | Never mid-build. Read replica / lake for analytics before any second store |
 | Redis | Queues/OTP/rate-limit/cache — ephemeral only | Never store durable state |
 | API | Versioned REST + envelope + zod | Third-party API program (add OpenAPI then) |
 | Auth | OTP customers, password vendors, JWT15m + rotating refresh | 2FA for vendors post-pilot |
-| Data access | Mongoose + `scopedModel` guard (no full repositories) | Second data store or duplicated query logic |
+| Data access | Drizzle + `withTenant(tx)` + RLS (no full repositories) | Duplicated query logic → per-module `queries/` |
 | Real-time | Socket.IO + polling reconciliation | >2 instances → add Redis adapter |
 | Files | Presigned S3-compatible uploads | — |
-| Deploy | Docker Compose on VPS + Caddy + Atlas | >~50 vendors or >1 instance needed |
+| Deploy | Docker Compose on VPS + Caddy + Supabase | >~50 vendors or >1 instance needed |

@@ -1,96 +1,138 @@
-# 05 — Edge-Case & Failure Catalog (v1 Master Spec)
+# 05 — Edge-Case & Failure Catalog (v1)
 
-This is the binding failure catalog: the things AI-written code silently gets wrong. Every case below is **binding**: each one must have explicit handling in code AND (where marked 🧪) an automated test. When implementing a module, re-read that module's section here first.
-
-Format: **Case → Required behavior.**
+Binding failure catalog: the things AI-written code silently gets wrong. Every case must have explicit handling in code AND (where marked 🧪) an automated test. When implementing a module, re-read that module's section first. Format: **Case → Required behavior.** DB terms are Postgres (`docs/03`).
 
 ---
 
-## 1. Auth & Sessions
+## 1. Auth & sessions
 
-1. Expired access JWT → 401 `TOKEN_EXPIRED`; frontends auto-refresh once and retry the request transparently; refresh also failed → hard logout to login screen. 🧪
-2. Malformed/absent/garbage JWT (`null`, `undefined`, truncated) → 401 `UNAUTHENTICATED`, never a 500 stack trace. 🧪
-3. Refresh-token reuse (old rotated token replayed — possible theft) → revoke entire token family, all devices logged out. 🧪
-4. OTP: wrong code 3× → invalidate that OTP, require new request. Resend inside 60s cooldown → 429. >5 OTP requests/phone/hour → 429. Codes are single-use and hashed in Redis. 🧪
-5. OTP requested for a phone that is a vendor-staff/admin identity → still fine (separate identity), creates/logs into a *customer* account.
-6. Vendor user disabled (`status: 'disabled'`) or vendor suspended while their JWT is still valid → write vendor routes check `subscription.status` via tenantContext (cached 60s). Suspended vendor write → 403. 🧪
-7. Same user logged in on two devices — allowed; refresh families are per-device; logout only kills that device's family.
-8. Deleted/archived vendor's staff tries to log in → 403 with clear message, not 500 on a null vendor.
-
----
-
-## 2. Table Sessions & Order Rounds
-
-1. **Two guests at the same table submit rounds concurrently:** Both rounds execute within MongoDB transactions; both check `table_sessions.status === 'active'`; both atomically decrement stock for their respective lines, insert their `order`, and append to `session.orderIds` with `$inc: { runningTotal: order.totals.itemsTotal }`. Zero lost rounds. 🧪
-2. **Order submitted while cashier is settling the table:** If the session is already transitioning to `settled`, the round transaction aborts and returns 409 `SESSION_CLOSED`. 🧪
-3. **Double-tap on order round submission:** Same `Idempotency-Key` arrives twice. First creates the round; second catches unique index `{vendorId, idempotencyKey}` → returns the existing round with `200` + `Idempotency-Replayed: true`. 🧪
-4. **Stock race on limited items:** Two tables order the last cappuccino simultaneously. Guarded `$inc` with `$gte: qty` inside the transaction; loser gets 409 `OUT_OF_STOCK` naming the item; diner cart prompts adjustment. NEVER read-check-then-decrement. 🧪
-5. **Menu price changed while diner had items in cart (`snapshotVersion` mismatch):** Returns 409 `PRICE_CHANGED` with fresh item prices; client cart shows old vs. new diff and asks diner to re-confirm. 🧪
-6. **Store closed or "Busy Mode" toggled after menu load:** Placement returns 423 `VENDOR_CLOSED`. Open and busy states are computed server-side at placement time only. 🧪
-7. **Rapid "Call Waiter" / "Request Bill" taps:** Debounced to max 1 pending request per 60 seconds per table; subsequent taps return 200 with existing pending status. 🧪
-8. **Table Reassignment:** Staff moves diner from Table 2 to Table 5: updates `tableId` and `tableNumber` on the active `table_sessions` document; existing rounds and running totals remain fully preserved. 🧪
+1. Expired access JWT → 401 `TOKEN_EXPIRED`; frontends auto-refresh once and retry; refresh also failed → hard logout. 🧪
+2. Malformed/absent JWT → 401 `UNAUTHENTICATED`, never a 500. 🧪
+3. Refresh-token reuse (rotated token replayed) → revoke the entire family, all devices out. 🧪
+4. OTP: wrong code 3× → invalidate OTP. Resend inside 60 s → 429. > 5 OTPs/phone/hour → 429. Codes single-use, hashed in Redis. 🧪
+5. OTP phone equals an owner's `users.phone` → still a *customer* identity; separate JWT. The owner-bot thread is keyed on `users.phone` only for inbound WhatsApp, never for OTP login.
+6. Owner disabled or vendor suspended while a JWT is valid → `tenantContext` checks `vendors.status` (cached 60 s); writes → 403. 🧪
+7. First-timer OTP without consent checkbox → account created, `consent_marketing = false`; utility messages (e-bill, status) still allowed under `consent_utility` recorded at OTP. 🧪
+8. Signup email already used → 409 `DUPLICATE`; demo/manual door for an existing email → attach to existing vendor, never create a second.
 
 ---
 
-## 3. Order Desk & Kitchen Operations
+## 2. Sessions & rounds (Postgres transaction; `docs/03` §2b.2)
 
-1. **Two staff members accept the same order simultaneously:** Guarded transition `{ _id, vendorId, status: 'placed' }` → set `accepted`. Loser receives 409 `CONFLICT_STATE` with current state; UI refreshes without error toast. 🧪
-2. **Diner cancels at the exact moment staff accepts:** Both use guarded transitions; exactly one wins atomically by construction. 🧪
-3. **Staff cancels after accepting (out of stock):** Allowed from `accepted` or `preparing` with mandatory reason; restores `limited` inventory atomically; notifies diner via Socket.IO and WhatsApp. 🧪
-4. **Order stuck in `placed` (staff overwhelmed/asleep):** Background auto-expiry job cancels `placed` orders older than 15 minutes with reason `vendor_no_response`, restores stock, and notifies diner. 🧪
-5. **Dine-in tab left open overnight (forgot to settle):** Nightly job flags unclosed active sessions older than 12 hours for manual cashier audit / auto-settlement so revenue metrics and table availability aren't blocked.
-
----
-
-## 4. Invoicing, GST & Day-End Close
-
-1. **Concurrent bill settlements generating sequential invoice numbers:** Sequential invoice numbers (`INV-2627-0042`) generated via atomic `findOneAndUpdate` with `$inc: { seq: 1 }` on `{ vendorId, key: "invoice:" + financialYear }`. Zero duplicate invoice numbers even under concurrent settlements. 🧪
-2. **Fiscal Year rollover (April 1st in India):** Financial year key shifts dynamically (e.g. `2026-2027` → `2027-2028`), resetting sequence to `1` automatically.
-3. **Rounding paise for GST compliance:** CGST and SGST calculated at 2.5% each on discounted subtotal. Net total rounded to nearest rupee with `roundOff` integer paise recorded explicitly (`totals.roundOff`).
-4. **Coupon code abuse & race condition:** Coupon with `maxUses: 100`: Guarded update `updateOne({ _id, usedCount: { $lt: maxUses } }, { $inc: { usedCount: 1 } })`. If `modifiedCount === 0`, coupon is exhausted → 422 `INVALID_COUPON`. 🧪
-5. **Day-End Close race condition:** Two cashiers click "Day Close" simultaneously on different tabs: Unique index `{ vendorId, date }` ensures only the first succeeds; second receives 409 `DAY_ALREADY_CLOSED`. 🧪
-6. **Negative Cash Variance:** Physical cash entered in drawer is less than system recorded cash: system records negative variance integer paise cleanly and flags the day-close log for owner review.
+1. **Two guests at the same table submit rounds concurrently** → both transactions `SELECT … FOR UPDATE` the session row; both run guarded stock decrements; both insert `orders`; `running_total` is `UPDATE … SET running_total = running_total + $`. Zero lost rounds. 🧪
+2. **Round submitted while cashier is settling** → settle transaction locks the session row and flips `status='settled'`; the round transaction sees it after the lock → 409 `SESSION_CLOSED`. 🧪
+3. **Double-tap on submit** → same `Idempotency-Key` → `UNIQUE (outlet_id, idempotency_key)` violation (SQLSTATE 23505) → return the existing order with 200 + `Idempotency-Replayed: true`. 🧪
+4. **Stock race on limited items** → `UPDATE menu_items SET available_count = available_count - $qty WHERE id = $1 AND (availability <> 'limited' OR available_count >= $qty)`; `rowCount = 0` → 409 `OUT_OF_STOCK` naming the item. NEVER select-then-update. 🧪
+5. **Price changed while items were in the cart** → the same UPDATE also matches `price_version = $cartVersion`; mismatch → 409 `PRICE_CHANGED` with fresh prices; client shows old vs new and re-confirms. 🧪
+6. **Outlet closed / busy after menu load** → placement returns 423 `VENDOR_CLOSED`; open/busy computed server-side at placement. Busy mode adds `busy_extra_eta_min` to the ETA shown. 🧪
+7. **Rapid call-waiter / request-bill taps** → max 1 pending `service_calls` row per session per 60 s; later taps return 200 with the existing pending row. 🧪
+8. **Second QR scan on an occupied table** → same session returned (one active session per table, partial unique index). A different phone joining adds a `dining_session_customers` row with badge new/repeat. 🧪
+9. **Table reassignment** → `table_moves` row + `dining_sessions.table_id` update inside one transaction; rounds and totals untouched. Target table occupied → 409 `TABLE_OCCUPIED`. 🧪
+10. **Regenerated QR token scanned** → 410 GONE with "ask staff for the new QR". 🧪
+11. **Practice table** → session/orders/bills carry `is_practice = true`; no WhatsApp, no events consumed by marketing, excluded from day-close and reports. 🧪
+12. **Pay-only outlet** (qrMode `pay_only`) → customer scan opens the bill view of the staff-entered session; no cart. If no session exists on that table → "nothing to pay yet, ask staff".
 
 ---
 
-## 5. WhatsApp Retention Pipeline & Meta Integration
+## 3. Order desk & kitchen
 
-1. **Meta API outage or 5xx/429:** Background BullMQ job retries with exponential backoff (5 attempts with jitter), then moves to `failed_retryable` in Dead Letter Queue. NEVER blocks the billing or ordering HTTP request. 🧪
-2. **Meta Frequency Cap (Error 131049):** When Meta blocks marketing template delivery due to user fatigue, message status updates to `skipped` with `skipReason: 'skipped_meta_cap'`. Campaign stats reflect this transparently. 🧪
-3. **Inbound `STOP` / Opt-Out:** Inbound webhook receiving "STOP" or "UNSUBSCRIBE" flips `whatsappOptIn: false` across all marketing triggers platform-wide immediately. Subsequent marketing jobs skip with `opted_out`. 🧪
-4. **Weekly Per-Customer Cap:** Worker checks `customer_profiles.messagesThisWeek` at send time. If `>= 2`, send is skipped with reason `weekly_cap`. 🧪
-5. **Birthday deduplication on worker crash:** Cron generates deterministic `dedupeKey`: `"{customerId}:birthday:{YYYY-MM-DD}"`. Unique sparse index prevents duplicate birthday messages even if cron re-runs. 🧪
-6. **Leap year birthday (Feb 29):** In non-leap years, cron sends on Feb 28.
-7. **Vendor revokes Meta WABA permissions:** Meta Cloud API returns 401/403: system marks vendor `whatsapp.status: 'suspended'` and alerts vendor dashboard with a "Reconnect WhatsApp" banner.
-
----
-
-## 6. AI Menu OCR Extraction
-
-1. **Blurry / unreadable menu photo:** AI parser returns low confidence scores on specific items: UI flags those rows in yellow/red on the staging grid for mandatory staff review before commit.
-2. **Price parsing anomalies (e.g. "150/-", "Rs 150.00"):** Parser normalizes strictly to integer paise (`15000`). If price is missing or unparseable, field is marked required in staging.
-3. **Duplicate category names in OCR output:** Staging importer merges items under the existing category rather than creating duplicate categories.
+1. **Two staff accept the same order** → guarded `UPDATE … WHERE id = $1 AND status = 'placed'`; loser gets `rowCount = 0` → 409 `CONFLICT_STATE`; UI refreshes silently. 🧪
+2. **Auto-accept** → at placement, if `outlets.auto_accept_enabled` and any active rule matches (repeat customer / grand_total < value / customer's order_count ≥ n) → the same transaction sets `accepted_at`, `accept_mode='auto'`, `accept_rule`, writes event `auto_accept_fired`. Never for practice orders, never when busy mode is on. 🧪
+3. **Customer cancellation request vs staff accept** → request only sets `cancel_requested_at`; the order keeps its state. Owner decides; approve → guarded cancel + stock restore; deny → notify customer. Request after `preparing` → 409 `CANCEL_NOT_ALLOWED`. 🧪
+4. **Staff cancels after accepting** → allowed from `accepted`/`preparing` with reason; stock restored in the same transaction; if a pay-now payment was captured → a refund is *required* before the bill can settle (bill shows "refund pending"). 🧪
+5. **Order stuck in `placed`** → auto-expiry job cancels after `placed_auto_expire_min` (default 15) with `cancelled_by='system'`, restores stock, notifies the customer. Uses the partial index `orders_stuck_ix`. 🧪
+6. **Slow order** → job flags orders past `slow_order_alert_min` since acceptance once (`slow_alerted_at`), emits `slow:order`. 🧪
+7. **Dine-in tab left open overnight** → 05:00 IST job lists sessions active > 12 h for owner audit; nothing auto-settles. Day-close records them in `open_sessions_carried`.
+8. **Takeaway token** → `ops.next_seq('token:{outlet}:{date}')`; resets daily; "collected" is a timestamp on the session.
 
 ---
 
-## 7. Multi-Tenancy (Leaks are P0)
+## 4. Billing, payments, GST, day-close
 
-1. **Vendor A token + Vendor B resource ID:** Returns **404 NOT_FOUND** (never 403, to avoid confirming existence). Enforced by `vendorId` in every query filter from JWT only. 🧪
-2. **Tenant isolation in Socket.IO:** Socket joins `vendor:{vendorId}` and `session:{sessionId}` only after strict JWT or sessionToken ownership verification.
-3. **Cross-tenant customer profile leakage:** A vendor ONLY ever queries `customer_profiles` where `vendorId === req.tenant.vendorId`. Phone numbers are masked (`98•••••210`) in UI responses.
+1. **Concurrent settlements → sequential invoice numbers** → `ops.next_seq('invoice:{outlet}:{fy}')` is one atomic `INSERT … ON CONFLICT … RETURNING`; `UNIQUE (outlet_id, financial_year, invoice_seq)` is the backstop. Never `count()+1`. 🧪
+2. **FY rollover (1 April)** → `app.fy_label()` computes the key; sequence restarts at 1 automatically. 🧪
+3. **No GSTIN at first settle** → 422 `GST_REQUIRED`; the wizard blocks "go live" checklist item until entered. 🧪
+4. **Rounding** → CGST/SGST at 2.5 % each on taxable total; grand total rounded to the rupee; `round_off` signed paise recorded. Tip is voluntary only; no service charge field exists. 🧪
+5. **Coupon abuse** → `UPDATE coupons SET used_count = used_count + 1 WHERE id = $1 AND (total_uses IS NULL OR used_count < total_uses)`; `rowCount = 0` → 422 `INVALID_COUPON`. Per-customer limit = `COUNT(*) FROM coupon_redemptions WHERE coupon_id, customer_id` inside the same transaction. Coupon applied after any payment → 422. 🧪
+6. **Bill paid in two modes** (₹500 UPI + ₹340 cash) → two `payments` rows; `bills.paid_amount` incremented by each; status `partially_paid` until `paid_amount >= grand_total`. Day-close sums **payments**, never bills. 🧪
+7. **Gateway webhook arrives twice / out of order** → `webhook_dedupe (source, event_id)` → second is 202 no-op. `captured` after `failed` for the same gateway order → captured wins (idempotent by `gateway_payment_id`). 🧪
+8. **Customer pays but the webhook is late** → payment stays `pending`; the customer page polls `GET /payments/{id}`; a reconcile job queries the gateway after 3 min. Staff may not settle while a gateway payment is `pending`. 🧪
+9. **Refund** → `payments(kind='refund', of_payment_id, refund_mode, reason, refund_by)`; back-to-source calls the gateway adapter and stays `pending` until its webhook; cash refund is `captured` immediately with `recorded_by`; adjust-replace links `replacement_order_id`. Refund > original payment → 422. 🧪
+10. **Pay whole table vs own items** → `scope='own_items'` sums lines where `order_lines.customer_id = me`; a line with no customer belongs to "whole table". Two diners paying "own items" concurrently → row lock on the bill. 🧪
+11. **Day-close race** → `UNIQUE (outlet_id, local_date)` → second click 409 `DAY_ALREADY_CLOSED`. Negative cash variance stored signed and flagged. 🧪
+12. **Void after payment** → not allowed; refund first, then void. Void writes `audit_logs`. 🧪
+13. **Complimentary line** → `comp_reason` mandatory (CHECK on `bill_discounts`); line keeps its price, discount row carries the amount so the discount-rate report is honest. 🧪
 
 ---
 
-## 8. Money, Time & Text
+## 5. Customers, consent, imports
 
-1. **Integer paise everywhere:** Any floating point number in a price, tax, or total calculation is a review-blocking defect.
-2. **UTC storage, IST display:** Database stores UTC `Date`. Cron schedules evaluate at Indian Standard Time (UTC + 05:30). Display formatted as `Asia/Kolkata`.
-3. **Phone normalization:** Normalized strictly to E.164 (`+91...`) across all intake points (QR ordering, staff walk-in punch, customer profile).
+1. **Inbound STOP / UNSUBSCRIBE / बंद** → before anything else: `customers.stop_at`, `consent_marketing=false`, `customer_consent_events` row, `conversations.opted_out`; every queued marketing message to that number skipped with `opted_out`. 🧪
+2. **Imported list** → rows land as `customer_profiles.lifecycle='imported'`, `consent_marketing=false`; the only message allowed is the opt-in template. Marketing to an imported number without a recorded opt-in → hard block in the worker (`no_consent`) + alert. 🧪
+3. **Same phone imported by two vendors** → one `customers` row, two `customer_profiles`; consent recorded per capture event with `vendor_id`; STOP is global. 🧪
+4. **Customer erasure request** → job per `docs/03` §4.7; vendor stats remain, PII gone; `customer_consent_events` kept as evidence. 🧪
+5. **Blocked customer** → can still browse; placement returns 423 `VENDOR_CLOSED` variant `BLOCKED` (message: "please order at the counter"); no marketing. 🧪
+6. **Birthday without year, Feb 29** → send on Feb 28 in non-leap years.
+7. **Segment recompute** → nightly `UPDATE customer_profiles SET segment = …` from rules (`at_risk_days`, `loyal_visits`); `segment_rule_version` stamped so a rule change is auditable.
 
 ---
 
-## 9. Infrastructure & Fallbacks
+## 6. WhatsApp pipeline & Meta
 
-1. **Redis outage:** Ordering and billing continue uninterrupted (ordering does not depend on Redis). WhatsApp message jobs queue in MongoDB or reject with 503 until Redis recovers.
-2. **Thermal printer offline / jammed:** Browser native print dialog (`window.print()`) allows cashier to re-click "Print Bill" or "Print KOT" at any time. WhatsApp E-bill is already dispatched digitally.
-3. **Customer offline at placement:** Mobile PWA retains cart in localStorage; shows retry button. Idempotency key guarantees that a delayed retry never double-orders.
+1. **Meta 5xx/429** → BullMQ backoff (5 attempts, jitter) → `failed_retryable` → DLQ; never blocks HTTP. 🧪
+2. **Error 131049 (per-user marketing cap)** → `status='skipped'`, `skip_reason='meta_cap_131049'`; campaign counts reflect it; retry the customer next campaign, not now. 🧪
+3. **Weekly per-customer cap (2)** → checked in the worker at send time from `customer_profiles.marketing_this_week`; skip `weekly_cap`. 🧪
+4. **Cron re-run / worker crash** → `message_dedupe` PK on `{customer}:{purpose}:{date}` → duplicate insert fails → no second birthday message. 🧪
+5. **24 h window** → inbound message sets `conversations.window_expires_at = now()+24h`; utility sends inside the window are marked `in_window=true, billable=false`; outside → template category pricing recorded. 🧪
+6. **Vendor revokes WABA permissions (v1.5)** → 401/403 from Cloud API → `whatsapp_channels.status='suspended'` + dashboard banner; sends skipped `vendor_suspended`.
+7. **Template paused/rejected by Meta** → `message_templates.meta_status`; campaigns using it cannot be scheduled (422) and running ones pause.
+8. **Holdout** → arm assigned deterministically by `hash(holdout_seed || profile_id) % 100 < holdout_percent`; control rows get no message but a `campaign_recipients` row and `holdout_assigned` event; the attribution job treats both arms identically. 🧪
+9. **Attribution window** → a visit within `attribution_window_days` after send creates `revenue_attributions`; one bill can be attributed to at most one campaign (`UNIQUE (bill_id, campaign_id)` + first-touch rule). 🧪
+10. **Dead-hour filler cap** → `dead_cap` recipients max, chosen by `visit_hours[hour]` desc; a customer messaged in the last 7 days is excluded. 🧪
+
+---
+
+## 7. Owner bot & tools
+
+1. **Bot asked to change something in v1** → tool `side_effect <> 'read'` → `tool_executions.status='denied'`, reply "coming in the next version"; never silently ignored. 🧪
+2. **Bot question about another outlet / vendor** → `ToolExecutionContext.tenant` is bound from the session; the tool runs under RLS; no data, plain "I only see Brewhouse Jaipur". 🧪
+3. **LLM proposes tool args with a foreign `outletId`** → schema validation + tenant check reject; logged as `guard` step. 🧪
+4. **Reply to a briefing older than 7 days** → new agent session; briefing context reloaded from `briefings.snapshot`.
+5. **Cost guard** → `agents.max_cost_paise_per_day` per vendor; over → polite refusal, `outcome='refused'`.
+6. **Confirmation (v1.5)** → `awaiting_confirmation` expires in 10 min; a late "YES" → "that request expired, ask again".
+
+---
+
+## 8. Menu import (AI extraction)
+
+1. **Blurry photo** → low `confidence` rows first in the grid; rows < 0.5 require explicit acceptance before apply. 🧪
+2. **Price formats "150/-", "Rs 150.00"** → normalised to integer paise; unparseable → row `price NULL`, apply blocked until fixed. 🧪
+3. **Re-photograph diff** → rows matched to existing items by normalised name; `action` = update/create/delete; owner applies as one transaction; every price change writes `menu_item_revisions`. 🧪
+4. **Duplicate category names** → merged into the existing category.
+
+---
+
+## 9. Multi-tenancy (leaks are P0)
+
+1. **Vendor A token + vendor B resource id** → RLS returns no row → 404 `NOT_FOUND` (never 403). 🧪
+2. **Socket rooms** → join only after JWT/session-token ownership check. 🧪
+3. **Customer data** → vendors only ever see `customer_profiles`; phone masked (`98•••••210`) in list responses; full phone only on the profile detail of an identified customer. 🧪
+4. **Worker code path** → `asWorker()` outside `jobs/` is an ESLint error; every worker query names `vendor_id` explicitly. 🧪
+
+---
+
+## 10. Money, time & text
+
+1. **Integer paise everywhere** (`app.paise`); any float in a money path is review-blocking. 🧪
+2. **UTC storage, IST display**; `local_date`/`day_part` come from the DB trigger — app code never computes them. 🧪
+3. **Phone normalisation** → E.164 (`+91…`) at every intake; the DB domain rejects anything else.
+
+---
+
+## 11. Infrastructure & fallbacks
+
+1. **Redis outage** → ordering and billing continue (they don't need Redis); WhatsApp sends queue in `messages(status queued)` and drain when Redis returns; OTP requests return 503. 🧪
+2. **Postgres pooler in transaction mode** → no `SET` outside `SET LOCAL`, no named prepared statements, no `LISTEN`. A violation shows up as cross-request tenant bleed — the leak matrix catches it. 🧪
+3. **Partition missing (clock skew / job failure)** → DEFAULT partition catches the row; alert on non-empty DEFAULT; `ops.ensure_month_partitions` on next cron.
+4. **Customer offline at placement** → PWA keeps the cart in localStorage; retry with the same idempotency key never double-orders. 🧪
+5. **Gateway down** → `POST /payments` returns 503 with "pay at counter"; staff can still settle by cash/UPI.

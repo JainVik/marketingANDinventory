@@ -1,6 +1,6 @@
 # 11 — V1 Master Feature Specification: Whole POS + Invoicing + QR Order + WhatsApp Retention
 
-> **Working Product Title:** RestroSarthi (codebase: Regulars / LocalServe)  
+> **Product:** Regulars. *Long-form spec kept for detail; where it disagrees with `01-product-scope.md` (the numbered final cut), 01 wins.*  
 > **Target Segment:** Independent cafes, bakeries, quick-service eateries (QSRs), and casual dining restaurants in India.  
 > **Core Value Proposition:** Your cafe's complete micro-POS & GST billing + QR table ordering + automated WhatsApp retention engine that runs itself — flat monthly subscription, zero commission, own your customer data.
 
@@ -16,13 +16,13 @@
   * `apps/admin-web`: React 18, Vite (Internal super_admin panel).
   * `packages/shared`: Single source of truth for Zod schemas, TypeScript types, state machine enums, error codes, and currency/phone normalization utils.
 * **Database & Persistence:**
-  * **MongoDB 7+ Replica Set (via Mongoose 8):** Multi-document ACID transactions for atomic order placement, stock decrement, and invoice generation.
+  * **PostgreSQL 16 on Supabase (via Drizzle ORM):** SQL migrations are the source of truth; ACID transactions with row locks and guarded UPDATEs for order placement, stock decrement, and invoice numbering; monthly partitions for event/message ledgers; pgvector for RAG.
   * **Redis 7 + BullMQ:** Ephemeral storage only — BullMQ WhatsApp message queues, repeatable cron jobs, OTP verification hashes (5-min TTL), and route rate limiters. Zero durable business data lives strictly in Redis.
 * **Real-time Synchronization:**
   * **Socket.IO:** Dedicated namespaces (`/vendor` and `/customer`) with room authorization (`vendor:{vendorId}` and `session:{sessionId}`). Emits on committed DB writes; client frontends maintain a 30s polling reconciliation fallback.
 * **Multi-Tenancy & Security Invariant:**
   * Strict tenant context: `vendorId` is extracted exclusively from the validated JWT via `tenantContext` middleware into `req.tenant.vendorId`. 
-  * Data layer uses `scopedModel(Model, vendorId)` wrapper. Direct unscoped queries in vendor routes are forbidden and enforced via automated tenant-leak matrix tests.
+  * Data layer: every vendor request runs inside `withTenant(tx)`; Postgres Row-Level Security filters every tenant table. Direct `db` access in services is forbidden; the tenant-leak matrix is generated from the schema.
 * **Money & Time Conventions:**
   * All currency amounts are stored as **integer paise** (₹1.00 = 100 paise). Display formatting via `formatINR()` only at UI boundaries.
   * All timestamps stored in **UTC**, displayed in **Asia/Kolkata (IST)**.

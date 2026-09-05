@@ -64,7 +64,7 @@ The unglamorous fortnight that decides whether week 12 is fun or hell. Build NO 
 
 1. **Scaffold the monorepo** exactly per docs/02 §2 (workspaces, apps/api, 3 frontends, packages/shared).
 2. **CI from the first commit**: lint + typecheck + test on every PR; auto-deploy `main` to staging. If deploy isn't automated in week 4 it never gets automated.
-3. **Environments**: local docker-compose (mongo single-node replica set, redis), staging VPS + Atlas free tier, prod untouched until Phase 5.
+3. **Environments**: local docker-compose (postgres 16 + pgvector, redis), staging VPS + a second Supabase project (or branch), prod untouched until Phase 5.
 4. **The skeleton**: env config (zod-validated), error envelope + central handler, request logging with requestId, auth (OTP + JWT + refresh rotation), tenantContext middleware, one protected route, Socket.IO handshake, one BullMQ job that logs, seed script with 2 fake cafes.
 5. **AI-coding discipline starts here**: CLAUDE.md at repo root; every session scoped to one module; every AI PR reviewed by a human founder (the one who did NOT prompt it); tests required in the same PR; conventional commits.
 6. **Walking skeleton demo**: on staging, a seeded customer logs in via OTP, hits a protected endpoint, sees seeded menu data in a bare-bones PWA page, and an event shows up in the vendor dashboard skeleton via socket. Ugly is fine. **End to end is the point.**
@@ -103,7 +103,7 @@ Working rules for this phase:
 1. **Release checklist** = docs/06 §10 gates: tenant-leak matrix green, `npm audit` clean, all 🧪 tests green, boot-fails-on-bad-config proven, load smoke (50 concurrent orders on `limited` stock → zero oversells/dupes).
 2. **UAT with 2 friendly cafes on staging**: real menu, real staff phone, fake customers (you three + friends). Watch them use the order board during a fake rush. Every confusion = a UI bug, log it.
 3. **Bug bash**: one evening, all three founders + friends try to break it (double-taps, airplane mode mid-order, absurd inputs, two tabs, back button).
-4. **Ops readiness**: Sentry wired and alerting to your group chat, /healthz monitored (UptimeRobot free), Atlas backups verified by actually restoring once, runbook.md (deploy, rollback, "site is down" steps, WhatsApp quality-rating drop response), rate limits verified.
+4. **Ops readiness**: Sentry wired and alerting to your group chat, /healthz monitored (UptimeRobot free), Supabase PITR verified by actually restoring once to staging, runbook.md (deploy, rollback, "site is down" steps, WhatsApp quality-rating drop response), rate limits verified.
 5. **Legal/compliance minimum**: ToS + privacy policy (DPDP-aware, lawyer-reviewed if affordable), WhatsApp templates approved in Meta, business entity + GST registration for billing, vendor agreement template (the pilot terms).
 
 **Gate:** checklist green, UAT cafes said "I'd use this," runbook exists, rollback rehearsed once.

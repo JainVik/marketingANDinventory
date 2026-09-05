@@ -5,9 +5,9 @@ Binding security requirements for v1. Items marked 🧪 must have automated test
 ## 1. Input handling & injection
 
 - Every endpoint zod-parses body, params, AND query before the controller runs; unknown keys stripped (`.strict()` where shape is closed). 422 on failure. 🧪
-- **NoSQL injection:** with zod coercing types, objects can't smuggle into string fields — but belt-and-braces: `express-mongo-sanitize` strips `$`/`.` keys from all inputs, and no query filter is ever built by spreading raw request objects (`{ ...req.query }` into a Mongoose filter is a review-blocking defect). 🧪 (test: `{"phone": {"$ne": null}}` on OTP login → 422, not a query)
-- No string-built queries anywhere; `$where`, `$function`, `$accumulator` are forbidden operators (ESLint ban + code review).
-- Regex from user input (search fields) → escape regex metacharacters via shared util; cap search string length (100) — ReDoS guard. 🧪
+- **SQL injection:** every query goes through Drizzle's query builder or the `sql` tagged template (parameterised). String concatenation into `sql.raw()` with request data is a review-blocking defect; `sql.raw` is allowed only for identifiers from an allowlist (sort columns) and is grep-audited in CI. 🧪 (test: `phone = "' OR 1=1 --"` on OTP login → 422, and the query log shows a bound parameter)
+- Segment rule DSL (`segments.definition`) compiles to SQL through a whitelist of fields and operators — never by interpolating the JSON. 🧪
+- Search fields use `ILIKE` with escaped `%`/`_` or trigram indexes; cap search string length (100). 🧪
 - File uploads: presigned URLs constrain content-type and size (≤ 2 MB); on save, server re-validates the stored object's magic bytes and re-serves only from the public bucket domain — user-controlled URLs are never stored (only keys we issued). SVG uploads forbidden (script vector).
 - JSON body limit 100 kB; array length caps in zod on every list field (items ≤ 50, addonIds ≤ 20, etc.).
 
@@ -21,7 +21,7 @@ Binding security requirements for v1. Items marked 🧪 must have automated test
 
 ## 3. AuthZ — permission matrix (enforced by `authorize()` + service-level ownership asserts)
 
-| Capability | customer | vendor_staff | vendor_admin | super_admin |
+| Capability | customer | staff (v1.1) | owner | super_admin |
 |---|---|---|---|---|
 | Place/cancel own order, review own completed order | ✅ | — | — | — |
 | View/act on vendor's orders; stock toggle | — | ✅ | ✅ | — |
@@ -37,15 +37,20 @@ Binding security requirements for v1. Items marked 🧪 must have automated test
 
 The integration suite contains a **tenant-leak matrix test**: for EVERY vendor-scoped resource type (orders, items, categories, reviews, customers, campaigns, staff, stats, quota, message logs), vendor A's token requests vendor B's resource by real ID → expect 404, and vendor A's list endpoints seeded with B's data → expect zero B rows. This suite is generated from a resource registry so a new module can't ship without joining it. 🧪🚦
 
-- `vendorId` always from JWT (tenantContext), never from client input on `/vendor/*`. Grep-able invariant: `req.body.vendorId|req.params.vendorId|req.query.vendorId` must not appear in vendor modules (ESLint custom rule).
-- Public projections: discovery/storefront endpoints use explicit `.select()` whitelists. A projection test asserts no `subscription`, `quotas`, `settings`, or contact-list fields ever appear in public JSON. 🧪
+- **Row-Level Security is the wall.** Every table with a `vendor_id` column has `FORCE ROW LEVEL SECURITY` and a generated policy keyed on `app.current_vendor_id()`; the API role `regulars_app` cannot bypass it. The leak-matrix test list is generated from `information_schema.columns WHERE column_name = 'vendor_id'` at test time, so a new table joins the gate on creation. 🧪🚦
+- `vendorId` always from JWT (tenantContext) into `withTenant()`; never from client input on `/vendor/*`. ESLint rules: no `req.*.vendorId` in vendor modules; no `db.` import in services (they take `tx`); no `asWorker()` outside `jobs/`.
+- Pooler discipline: transaction-mode pooling means `SET LOCAL` only — a plain `SET` would leak tenant context to the next request. Lint + a test that runs two tenants over one pooled connection. 🧪
+- Global `customers` table: readable only via the customer's own JWT (`app.customer_id`) or through the vendor's `customer_profiles` row (policy `customers_read`). 🧪
+- Public projections: storefront endpoints select explicit column lists. A projection test asserts no `gateway_*`, `sub_*`, settings, or customer fields appear in public JSON. 🧪
 
 ## 5. Secrets, tokens, crypto
 
 - Passwords: argon2id (memory 64 MB, time 3); no MD5/SHA-anything for passwords. OTPs & refresh tokens stored hashed (SHA-256 is fine here — high entropy inputs).
 - JWT RS256; private key only on API hosts via env/secret store; `kid` header for future rotation; access 15 min; no sensitive data in claims beyond `sub/role/vendorId`.
 - Refresh cookie: `httpOnly`, `Secure`, `SameSite=Strict`, path-scoped to `/api/v1/auth`.
-- Webhook: verify `X-Hub-Signature-256` (timing-safe compare) before parsing; Meta verify-token random ≥ 32 bytes.
+- Webhooks: verify `X-Hub-Signature-256` (Meta) / provider signatures (Razorpay, Cashfree) with timing-safe compare before parsing; Meta verify-token random ≥ 32 bytes; every raw payload stored in `webhook_events`, deduped by `(source, event_id)`.
+- Gateway and WABA credentials are never stored in the DB — `*_ref` columns hold vault keys (Supabase Vault / env-injected secrets); the API reads them only inside the payment/whatsapp adapters.
+- Owner bot: tool calls run with the session's tenant context, never with arguments the model supplies for `vendorId`/`outletId`; write tools are denied in v1 at the registry level (`tools.surface_bot`), not by prompt. 🧪
 - All secrets via env (zod-validated at boot); `.env*` gitignored; secret scanning (gitleaks) in CI. 🚦
 - TLS everywhere (Caddy auto-HTTPS); HSTS; no HTTP listener in production.
 
@@ -71,29 +76,32 @@ The integration suite contains a **tenant-leak matrix test**: for EVERY vendor-s
 - Node LTS only; `engines` pinned; lockfile committed; no postinstall-script packages added without review (`--ignore-scripts` in CI installs).
 - Docker: non-root user, distroless/slim base, read-only fs where possible.
 - CORS: exact-origin allowlist from env (the three frontend origins); credentials true only for auth paths; no `*`.
-- Mongo Atlas: IP allowlist to API hosts, TLS, least-privilege DB user (no admin), separate users for api vs migrations.
+- Postgres (Supabase): TLS required; three roles — `regulars_app` (RLS enforced, no DDL, no DELETE), `regulars_worker` (BYPASSRLS, jobs only), `regulars_ml` (read-only); migrations run with the direct URL under a separate migrator user; pooler URL at runtime. Network restrictions to API hosts where the plan allows.
 
 ## 8. Privacy & data protection (India — DPDP Act awareness)
 
 - We hold personal data: phone, name, birthday, order history. Principles baked into v1:
   - Collect minimum (birthday is optional, no year, no address in v1).
   - WhatsApp marketing strictly on recorded, revocable consent (timestamp + source stored). Opt-out honored globally and immediately. 🧪
-  - Vendors see masked phones; full numbers never leave the platform (no export endpoints in v1). 🧪
-  - PII redaction in logs: pino redact paths for phone/name/birthday everywhere; request bodies never logged raw on auth/order/customer routes. 🧪
-  - Deletion path: customer account deletion (admin-mediated in v1) anonymizes user + customer_profiles (`name: 'Deleted user'`, phone removed/hashed) while keeping order aggregates for vendor accounting.
-  - Data lives in-region where practical (Atlas Mumbai region).
+  - Consent is purpose-level (marketing / utility / model-training) with a notice version, kept as current flags on `customers` plus the append-only `customer_consent_events` ledger. Imported lists get no marketing until an opt-in event exists. 🧪
+  - Vendors see masked phones in lists; the vendor export (#9) contains the vendor's own `customer_profiles` (the list is theirs) but never other tenants' data. 🧪
+  - PII redaction in logs: pino redact paths for phone/name/birthday; request bodies never logged raw on auth/order/customer routes; `app.events.payload` carries no PII by contract (payload schemas are PII-free, tested). 🧪
+  - Erasure path (`docs/03` §4.7): `customers` phone hashed + name/birthday nulled, `customer_profiles` PII nulled, `messages` content nulled, bill phone masked to last-4 (GST record), lake tombstones. `customer_consent_events` kept as evidence.
+  - ML/lake export strips PII at the CDC boundary via a per-table column allowlist; free-text (bot input, message text) exported only where `ml.ai_feedback.training_eligible = true`.
+  - Data lives in-region (Supabase Mumbai `ap-south-1`).
 - Disclaimer: DPDP compliance details (notices, grievance officer, etc.) need legal review before public launch — this doc covers engineering posture only.
 
 ## 9. Auditability & monitoring
 
-- `audit_logs` for every privileged mutation: subscription changes, review hide/unhide, staff add/remove, template changes, campaign sends, manual vendor edits by admin.
+- `app.audit_logs` (partitioned, append-only) for every privileged mutation: settings changes (incl. auto-accept), refunds, voids, day-close, customer block, subscription changes, template changes, campaign sends, admin edits. Every tool execution links its audit row (`tool_execution_id`).
 - Auth anomalies logged with IP/device: refresh-reuse events, repeated OTP failures, login backoff triggers; daily digest to super_admin in v1 (no SIEM yet).
 - Sentry alerts on: 5xx rate spike, DLQ growth, webhook signature failures, OTP budget breach.
 
 ## 10. Release gates summary 🚦
 
 1. Tenant-leak matrix green.
-2. `npm audit` high = 0; gitleaks clean.
+2. `npm audit` high = 0; gitleaks clean; `sql.raw` audit clean.
 3. All 🧪 items in this doc + `05-edge-cases-and-failures.md` implemented and green.
 4. `.env.example` complete; boot fails on missing config (proven by a CI test).
-5. Load smoke: 50 concurrent order placements against staging with `limited` stock — zero oversells, zero duplicate orders.
+5. Load smoke: 50 concurrent order placements against staging with `limited` stock — zero oversells, zero duplicate orders, zero duplicate invoice numbers under 20 concurrent settles.
+6. `db/seed/smoke.sql` green against the migrated staging database (RLS, counters, partitions, append-only guards).

@@ -1,103 +1,143 @@
-# 01 — Product Scope (v1 Master Spec)
+# 01 — Product Scope (v1 Final Cut, 5 Sep 2026)
 
-> **Working name:** RestroSarthi (codebase: Regulars / LocalServe)  
-> **One-liner:** A multi-tenant micro-POS, GST invoicing, QR table ordering, and automated WhatsApp retention platform for independent Indian cafes, bakeries, and QSRs — without them building an app or getting squeezed by aggregators.  
-> **Launch strategy:** Single city pilot. Vendors pay a flat subscription; customers use it free.
+> **Name:** Regulars. **Line:** "We make customers come back."
+> **What it is:** QR dine-in ordering + WhatsApp retention SaaS for independent Indian cafes, restaurants and (v2) hotels.
+> **Thesis:** ordering is the trap door. Every QR order or payment carries a verified phone number, so the owner finally knows who eats there. Then rules + AI + WhatsApp bring them back. Flat subscription, zero commission, the customer list is the owner's.
+> **Launch:** single city (Jaipur), 3–5 pilot outlets; run-alongside play — keep Petpooja, put our QR on 5 tables for 2 weeks.
 
-This document defines WHAT v1 does. It deliberately excludes HOW (see `02-architecture.md`). Anything not listed under "In scope" is OUT of v1.
+This document defines WHAT v1 does. HOW is in `02-architecture.md`. Anything not in §2 is OUT of v1 (§4 says which version it belongs to).
 
 ---
 
-## 1. Actors & Roles
+## 1. Actors & roles
 
-| Role | Description | Access surface |
+| Role | Description | Surface |
 |---|---|---|
-| `customer` | End user who scans QR, browses menu, places rounds, and tracks bills | Customer PWA (Mobile) |
-| `vendor_admin` | Cafe owner (the tenant). Full control over catalog, staff, payment settings, campaigns, and reports | Vendor dashboard & Order Desk |
-| `vendor_staff` | Employee added by vendor_admin. Can operate Order Desk (Table Grid, Orders Kanban, Walk-in Punch, Stock toggles) and perform Day Close. No catalog/campaign/settings access | Vendor dashboard (restricted) |
-| `super_admin` | Platform operator (us). Onboards/suspends vendors, manages subscriptions, moderates reviews, views platform metrics | Admin panel (minimal internal UI) |
+| `customer` | Scans a QR, browses without login, verifies phone by OTP to order/pay, tracks status and bill | Customer PWA (mobile, no app) |
+| `owner` | The tenant. One login in v1. Full control: menu, tables, order desk, billing, customer book, campaigns, settings | Owner desktop: left sidebar Orders / Tables / Menu / Reports / Settings |
+| `staff` | **v1.1.** Role and permission columns exist; no staff logins in v1 | — |
+| `super_admin` | Platform operator: onboards/suspends vendors, subscriptions, templates, moderation, cross-tenant logs | Admin panel (minimal) |
+| Owner bot | Read-only assistant on WhatsApp: reply to the morning briefing, ask questions in plain language, answers from the owner's own data | WhatsApp (owner's number) |
 
-A single human may hold `customer` and `vendor_admin` accounts, but they are **separate identities** (different login flows).
+A vendor (business) has one or more outlets (v1: exactly one; multi-outlet v2). All data is scoped by `vendor_id` + `outlet_id` from day 1.
 
----
-
-## 2. In Scope — v1 Modules
-
-### 2.1 Vendor Onboarding & Outlet Profile
-- Outlet profile: name, slug (`/v/{slug}`), logo, cover image, address, city, geo-coordinates, operating hours per weekday (supports midnight-crossing hours), GSTIN, and FSSAI license number.
-- Operational switches: 1-tap "Force Closed" switch and "Busy Mode" order throttle.
-- Practice Mode: Pre-configured test table to test order flows and thermal receipts without polluting live sales or firing live customer WhatsApp messages.
-- Super admin sets subscription status (`trial`, `active`, `past_due`, `suspended`). Billing collection is manual in v1. Suspended vendor: storefront hidden, ordering blocked, dashboard writes 403.
-
-### 2.2 Table Management & QR Generation
-- Table list with cryptographically unguessable tokens (e.g. `Table 04` -> `/v/{slug}/t/{token}`).
-- Table grouping: Indoor, Outdoor, Terrace, Counter.
-- **Print-Ready QR Generation:** 1-click generation of a downloadable/printable PDF sheet of branded table cards with crisp QR codes and counter takeaway stands.
-
-### 2.3 Catalog & AI Menu Builder (The Onboarding Moat)
-- **AI Photo/PDF OCR Extraction:** Upload paper menu photo or PDF -> AI vision extracts categories, items, prices, veg/non-veg tags into an editable staging grid for 1-click review and commit.
-- **Spreadsheet Import / Bulk Grid:** Standard Excel/CSV template import + bulk-edit grid (select many -> change price / tax / stock).
-- Catalog structure: Categories -> items -> embedded variants (Small/Large) -> add-on groups (with min/max rules).
-- Item fields: name, description, photo URL, base price (paise), GST rate (default 5%), veg/non-veg flag, prep time, bestseller badge, sort order, `isActive`.
-- Stock states: `in_stock`, `out_of_stock`, and `limited` (with atomic decrement and auto-flip to `out_of_stock` at 0). 1-tap availability toggle with optional "Auto-restore next morning".
-- **Live Phone Preview:** Interactive mobile simulator in the dashboard showing real-time diner view with validation warnings.
-
-### 2.4 Table Sessions & Customer Ordering (Mobile PWA)
-- Instant access: scan table QR -> menu opens with table auto-attached (no login to browse).
-- Cart per phone, special cooking instructions (≤ 200 chars).
-- Phone-OTP on order placement (first-timer: phone + WhatsApp/SMS OTP + name + WhatsApp consent checkbox; returning diner: 1-tap).
-- **Table Sessions & Rounds:** Diners place rounds that stack onto the table's shared active tab. Multiple guests at the same table can submit rounds.
-- In-Session Table Services:
-  - **"Call Waiter" Button:** Triggers instant assistance alert on the Order Desk.
-  - **"Request Bill" Button:** Notifies cashier table is ready to settle; displays running itemized bill.
-- Takeaway / Counter Mode: Counter QR scan issues daily sequential token (e.g., `#A-14`) with live ready notifications.
-
-### 2.5 Order Desk (Dual-Mode Staff POS)
-- **Live Table Floor Grid:** Real-time visual floor cards showing table states: *Empty*, *Occupied & Eating* (shows running tab ₹ total and seated duration), *Bill Requested*, and *Assistance Needed*.
-- **Live Orders Kanban:** Columns for *New Orders* (with loud persistent audio chime until accepted), *Preparing*, *Ready*, and *Completed*.
-- Order lifecycle actions: Accept with ETA, prepare, ready, served, reject/cancel with mandatory reason (restores limited stock).
-- **Staff Quick-Punch Billing:** Visual menu popup to punch walk-in counter orders or manual table rounds.
-- Table reassign tool & one-tap "Busy Mode" order throttle.
-
-### 2.6 Billing, Invoicing & Settlement
-- **GST-Compliant Tax Invoices:** Sequential numbering per FY (e.g. `INV-2627-0042`), itemized CGST (2.5%), SGST (2.5%), round-off paise, voluntary tip, cafe GSTIN and FSSAI.
-- **Payment Collection & Recording:**
-  - *Counter Recording:* Staff records payment mode: Cash, UPI, or Card.
-  - *Direct Cafe Dynamic UPI QR:* Bill displays a dynamic UPI QR with cafe's VPA (`upi://pay?pa=...`) for instant, zero-commission payment.
-  - *Configurable Gateway:* Optional Razorpay keys allow automated in-app payment.
-- **Discounts & Coupons:** Owner-created coupon codes (e.g. `WELCOME10`, flat ₹ off) + staff counter discount tool (% or flat ₹) + complimentary items with reason.
-- **Receipts & Printing:**
-  - *WhatsApp E-Bill:* Instant digital bill sent via WhatsApp with link to tax invoice.
-  - *Browser Thermal Printing:* 1-click "Print Bill" or "Print KOT" via standard browser print formatted for 80mm/58mm thermal rolls.
-- **Day-End Close & Reconciliation:** Shift closure summary: gross/net sales, GST collected, payment mode totals, and physical cash drawer variance balancing (over/short).
-
-### 2.7 WhatsApp Retention Funnel (GoKwik-Style WABA)
-- **WABA Architecture:** Cafes connect their own WhatsApp Business Account via Meta Embedded Signup / Cloud API, displaying their own verified brand name and isolating quality ratings.
-- **Per-Vendor Customer Graph:** Auto-built on every completed order/bill: name, masked phone, visit count, total spend, birthday, dynamic segments (`new`, `repeat`, `loyal`, `at_risk`).
-- **Core Automated Triggers (Default-On):**
-  1. *Post-first-visit thank you* with next-visit offer (sent 2h post completion).
-  2. *Birthday treat* (sent 08:00 AM IST morning of birthday).
-  3. *30-day Win-back* for at-risk regulars (max 1 per 45 days).
-- **Manual Segmented Campaigns:** Broadcast targeted offers to segments with pre-approved Meta templates.
-- **Frequency Caps & Opt-Out:** Max 2 marketing messages/week/customer. `STOP` reply revokes consent platform-wide immediately. Meta error 131049 handled cleanly as `skipped_meta_cap`.
-- **Attributed Revenue Ledger:** Dashboard tile proving exact rupees generated and orders driven by WhatsApp marketing.
-
-### 2.8 Verified Reviews & Smart Feedback Routing
-- Gated strictly to verified diners with a `completed` order/bill (1 review per bill, editable 24h).
-- **Smart Routing:**
-  - *4 or 5 Stars:* 1-tap deep link to cafe's Google Business Maps profile to drive SEO and organic footfall.
-  - *1, 2, or 3 Stars:* Captured as private feedback alerting owner dashboard to resolve grievances before public negative reviews.
+**Two halves of the product:** Section 1 *Data-making* (items 1–47, free forever) and Section 2 *Marketing & analysis* (48–60 + 65, paid). 64 and 66 are foundations/settings.
 
 ---
 
-## 3. Explicitly OUT of v1 (Do Not Build)
+## 2. In scope — v1 (numbered; these numbers are referenced across the docs)
 
-- Native raw ESC/POS hardware print driver / auto-cut integration (browser thermal print used instead).
-- Move / merge tables & customer-side split bill payments (deferred to v1.1).
-- White-label delivery logistics & rider tracking.
-- Table reservations / advance bookings.
-- Multi-outlet brand chaining (1 vendor = 1 outlet in v1).
-- Customer-side native iOS/Android apps (PWA only).
-- Deep raw ingredient recipe-level inventory depletion (item-level stock states used instead).
-- Customer points-based loyalty wallet (segmented rule-based retention used instead).
-- Petpooja / external POS bi-directional sync adapters.
+### Section 1 — Data-making (free forever; customer *count* visible)
+
+**A. Onboarding**
+1. Three signup doors — self-signup (OTP), demo-led, manual — all land in one wizard.
+2. Outlet profile: name, address, type (cafe / dining / hotel-ready), hours, open–closed switch.
+3. GST/FSSAI optional at signup, required before the first invoice.
+4. QR mode per outlet: **order / pay-only / both**. Pay-only = zero staff disruption on-ramp; all modes capture the phone.
+5. First-run wizard with progress + "go live" checklist: menu + one QR + one test order = live.
+6. Practice mode: a test table; its orders never hit the kitchen, the books, or customer WhatsApp.
+7. Customer-list import (CSV → column map) + WhatsApp opt-in ask to imported numbers. **No marketing to imported numbers before opt-in.**
+8. Payment-gateway onboarding (restaurant is merchant of record, Razorpay/Cashfree) — skippable; pay-at-checkout works without it.
+9. Export everything anytime; monthly plan, cancel anytime.
+
+**B. Menu**
+10. Categories, items (name / description / price / veg–non-veg / photo optional / GST rate), bestseller tag.
+11. Variants + add-on groups (min/max).
+12. Availability toggle on the row, with auto-restore (next open / at time).
+13. Bulk-edit grid.
+14. Import: photo (AI extract → review grid, low-confidence rows first) / PDF / Excel-CSV.
+15. Re-photograph = diff update ("12 prices changed, 3 new, 2 gone — apply?").
+16. Live phone preview with warnings.
+17. Offers banner (owner-written / day-wise / festive) atop the customer menu.
+
+**C. Tables & QR**
+18. Table list, kind = table / room / counter, one opaque token per table (`/v/{slug}/t/{token}`, never `?table=4`; rotating QRs = never).
+19. QR PDF sheet (free) + per-table reprint/regenerate; delivered standees as a paid option.
+20. Counter QR for takeaway → token number, ready notification, mark collected.
+
+**D. Customer (mobile PWA)**
+21. Scan → menu, table auto-attached, browse without login.
+22. Item sheet, cart, instructions — cart is per phone (client side; no shared cart).
+23. Place order → phone OTP (first-timer: name + consent checkbox) → **accept-gate** (nothing is made until staff accepts) → **pay prompt after acceptance**.
+24. Counter/takeaway orders: pay first.
+25. Live status, order more (rounds), call waiter, request bill.
+26. My bill: rounds, per-person attribution, pay whole table OR pay own items.
+27. Cancellation *request* (shown only if the outlet enables it) → owner decides.
+28. Coupon code field at checkout.
+29. First visit: e-bill on WhatsApp (the consent moment — "get your bill on WhatsApp"). Repeat: in-app bill + optional send.
+30. Customer history across all Regulars outlets + add-to-home-screen prompt after first order.
+
+**E. Order desk (desktop)**
+31. Live New / Preparing / Ready columns with table + customer badge (new / repeat / visit count).
+32. Loud persistent alert until accepted.
+33. Accept + ETA / preparing / ready / complete / reject presets.
+34. Staff order entry (table and no-table) — required for pay-only mode and walk-ins.
+35. Reassign table, busy mode.
+36. Owner-initiated cancel with reason; handle cancellation requests.
+37. Table grid (empty / eating / needs-you) → table sheet with running total + settle.
+38. **Regulars Board** panel: who's seated now, name, visit count, usual order.
+39. Slow-order alert.
+
+**F. Billing**
+40. Pay now (gateway, direct to the restaurant's account) / pay at checkout (running tab) — default by outlet type (cafe = pay now, dining = at checkout).
+41. GST invoice: CGST/SGST, GSTIN, FSSAI, sequential number per outlet per FY, round-off, voluntary tip line. One invoice per bill. Generating is mandatory, printing optional. No auto service charge.
+42. Coupons: owner-generated, flat / %, validity, total-uses + per-customer limits, applied before payment only.
+43. Complimentary item with reason.
+44. Payment-mode capture (cash / UPI / card); a bill may be settled in more than one mode.
+45. Refunds: back-to-source (gateway) / cash at counter (recorded) / adjust-replace — reason + who on every one. We never refund; the restaurant does.
+46. Day-close report + cash reconciliation.
+47. Discount and void-rate report.
+
+### Section 2 — Marketing & analysis (paid)
+
+48. Customer book: rule segments (new / repeat / loyal / at-risk), block customer.
+49. **Identity capture rate** tile.
+50. **Lapsed wall**: at-risk count + rupee value.
+51. Automatic triggers: birthday (opt-in at OTP + WhatsApp follow-up), win-back, post-first-order thank-you.
+52. Manual segmented campaigns with pre-written templates.
+53. **Dead-hour filler**: detect empty hours → capped send to customers who visit then → measure.
+54. **Holdout on every campaign** (20 % control) → real lift shown.
+55. Revenue ledger ("this brought back ₹X").
+56. **Morning WhatsApp briefing** to the owner.
+57. Menu conclusions: move up / kill / slowing the kitchen; never-ordered list.
+58. Market-basket upsell suggestions.
+59. Kitchen speed by hour/day.
+60. Smart review routing: happy → Google ask (routing switch ships v1.1), unhappy → private.
+
+### Foundations (both sections)
+
+61. WhatsApp pipeline: queue, retries, DLQ, opt-in/STOP, quotas, per-customer caps, dedupe, 24 h window, error 131049 handling.
+62. Admin panel + foundations: auth, tenant isolation (RLS), sockets, events log, CI.
+63. Public site: 10 pages + mega-menu with "coming soon" greyed (`13-website-and-onboarding-funnel.md`).
+64. **Every owner action is exposed as a callable API function** (the `tools` registry) — design rule; enables the bot and all future automation.
+65. **Read-only owner bot on WhatsApp**: reply to the morning briefing, ask in plain language, answers from own data only. Reads free; writes v1.5 with confirmation; irreversible actions never automatic.
+66. **Auto-accept setting, conditional** (repeat customers / under ₹X / after first 2 orders) — owner toggles in v1; bot toggles it in v1.5.
+
+**AI positioning (honest):** v1 AI = things that work on day one with zero data — morning briefing, RFM + rule-based lapse alerts, market-basket upsell, menu-photo extraction, owner bot Q&A. **Do not market "AI predicts churn" in v1.**
+
+---
+
+## 3. Business model
+
+- Flat subscription only, ₹999–2,999 / outlet / month band; WhatsApp message costs pass-through. No commission, ever.
+- Free forever: 1–47. Paid: 48–60, 65.
+- Money never touches us (RBI PA rules). Each restaurant is merchant of record with a licensed gateway; we create the payment request and listen for the webhook. "Your money is in your account today."
+- Verify before launch: Meta India service-message rate card (1 Oct 2026 change), gateway/merchant-of-record structure with a lawyer, CA on e-invoice position, DPDP notice text.
+
+---
+
+## 4. Not in v1 — version ledger (columns may exist; features do not)
+
+| Version | Items |
+|---|---|
+| **v1.1** | staff PIN on sensitive actions · staff logins/permissions · move + merge table · order modification after placing · split payment-mode entry at settlement UI · GSTR-1 export · happy-hour pricing · dine-in vs takeaway price lists · KOT routing + thermal printing (Android print-agent) · combos · credit notes · competitor-POS menu import · waiter-assist · abandoned-cart nudge · Google review routing (4–5★) · 2nd-visit nudge |
+| **v1.5** | owner bot write actions (sold out / busy / price / item via WhatsApp with confirm; campaigns + bulk + refunds hand off to in-app preview) · Hinglish AI copy (human approval mandatory) · AI-suggested campaigns · churn ML replaces rules · pooled cross-tenant forecasting · smart send times · Meta Tech Provider → per-vendor WABA · points loyalty (replayable from events) |
+| **v2** | hotels (room QR + room tabs + during/post-stay funnel) · inventory · table booking · multi-outlet · group "pool" cart · full discovery · POS integrations |
+
+## 5. Dropped — do not re-open
+
+Shared server-side cart · "bill vanishes if not sent on WhatsApp" · customer-side split payment · money through us / commission · AI-generated dish photos · Zomato listing scraper · "AI predicts churn" as a v1 claim · forced staff logins in v1 · rotating QRs.
+
+## 6. Still open (decide before the module is built)
+
+Refund default per outlet type · offers-banner edge cases · move table (v1 or v1.1) · group-ordering validation (sit in 10 restaurants).
