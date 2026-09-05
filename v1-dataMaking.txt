@@ -1,0 +1,50 @@
+★ = things you didn't mention that are necessary.
+
+A. Owner onboarding
+
+Owner signup (phone/email + password, OTP verify)
+Outlet profile (name, address, city, hours, logo, ★GSTIN + FSSAI number — needed on every bill)
+Outlet type selection (cafe / restaurant / bakery / hotel… — tailors the setup; hotel rooms stay v2)
+Open / temporarily-closed switch
+
+B. Menu builder (the part that beats Petpooja)
+5. Categories (create, reorder, on/off)
+6. Items (name, photo, description, price, veg/non-veg, GST rate default 5%)
+7. Variants (Small/Large) and add-on groups (min/max pick rules)
+8. Item availability toggle — one tap, ★auto-restore next morning
+9. ★Bulk edit grid (select many → change price / tax / availability / category)
+10. ★Menu import from Excel + ★from a photo/PDF of the printed menu (OCR → structured menu)
+11. ★Live phone preview of the menu while editing (with warnings: missing photo, name too long)
+12. Bestseller / recommended tags
+
+C. Tables & QR
+13. Table list (T1…Tn), one unguessable token per table
+14. QR generation → one print-ready PDF sheet of labeled table cards; per-table reprint/regenerate
+15. Counter QR for takeaway (no table)
+
+D. Customer ordering flow
+16. Scan → menu opens (table auto-attached; no login to browse)
+17. Item detail, variants/add-ons picker, cart, special instructions
+18. Login with phone OTP at "Place order" (first-timer = signup: name + ★privacy/consent checkbox)
+19. Order placed → live status screen (accepted → preparing → ready)
+20. ★Order more on the same table (rounds stack onto one table bill)
+21. ★"Call waiter" and "Request bill" buttons
+22. Order history + reorder
+
+E. Order desk (owner's incoming-orders screen)
+23. Live incoming-orders list with table number, items, customer badge (new / repeat)
+24. ★Loud persistent new-order alert (sound + vibration, keeps working when screen is locked)
+25. One-tap accept + ETA, preparing, ready, completed; reject/cancel with reason
+26. Reassign table on any order; ★busy-mode (pause new orders)
+27. ★Table view — all open orders grouped by table, current running total per table
+
+G. Inventory → v2 (as you said).
+
+Billing (F) becomes:
+28. Every order offers Pay now or Pay at checkout
+29. Pay at checkout = running tab per table/room — rounds stack, settled once
+30. Billing mode set by outlet type: cafe/QSR → pay-now default · dining → tab default · hotel room → tab settled at checkout (room part v2, but the mode exists in the model)
+31. GST-compliant bill (CGST/SGST, GSTIN, FSSAI, sequential invoice no.), discounts, voluntary tip line
+32. Payment mode capture (cash / UPI / card) + mark paid
+33. E-bill on WhatsApp/SMS + UPI QR on the bill
+34. Day-close report

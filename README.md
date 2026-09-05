@@ -6,7 +6,7 @@ A complete feeding-document set for building the platform with AI coding tools (
 
 ```
 CLAUDE.md                          ← put at the REPO ROOT — Claude Code auto-reads it every session
-docs/
+docs/ (or repo root)
 ├── 01-product-scope.md            ← WHAT v1 is (and the explicit not-list)          [feed to AI]
 ├── 02-architecture.md             ← stack, monorepo, layers, tenancy, WhatsApp rail [feed to AI]
 ├── 03-database-schema.md          ← every collection, index, and atomicity rule     [feed to AI]
@@ -16,10 +16,12 @@ docs/
 ├── 07-market-research.md          ← India POS/WhatsApp/AI market — for the FOUNDERS
 ├── 08-owner-com-teardown.md       ← Owner.com product teardown + verdict — FOUNDERS
 ├── 09-execution-roadmap.md        ← day one → production, phases & gates — FOUNDERS
-└── 10-backend-technical-roadmap.md← backend decisions + 15-step build order — BOTH
+├── 10-backend-technical-roadmap.md← backend decisions + 15-step build order — BOTH
+├── 11-v1-master-feature-specification.md ← Master V1 Feature Spec (POS, Invoicing, QR, WABA) [feed to AI]
+└── 12-ux-wireframe-flow-map.md    ← Screen-by-Screen UX flows & Mermaid maps        [feed to AI]
 ```
 
-Docs 01–06 + CLAUDE.md are the AI's binding contract. Docs 07–09 are founder strategy references (don't paste them into coding sessions — their conclusions are already folded into 01–06). Doc 10 bridges both: humans read it to understand the order; point the AI at it when scaffolding.
+Docs 01–06, 11, 12 + CLAUDE.md are the AI's binding contract. Docs 07–09 are founder strategy references (don't paste them into coding sessions — their conclusions are already folded into 01–06, 11). Doc 10 bridges both: humans read it to understand the order; point the AI at it when scaffolding.
 
 ## How to use with Claude Code
 

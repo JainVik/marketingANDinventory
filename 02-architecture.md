@@ -33,8 +33,10 @@ Binding technical blueprint for v1. Product scope lives in `01-product-scope.md`
 │   │       ├── modules/       # DOMAIN MODULES — see §3
 │   │       │   ├── auth/
 │   │       │   ├── vendors/
+│   │       │   ├── tables/      # table management, tokens, floor state
 │   │       │   ├── catalog/
-│   │       │   ├── orders/
+│   │       │   ├── orders/      # table sessions, rounds, order lifecycle
+│   │       │   ├── billing/     # GST tax invoices, coupons, day-close reconciliation
 │   │       │   ├── reviews/
 │   │       │   ├── customers/   # per-vendor customer profiles & segments
 │   │       │   ├── campaigns/   # triggers + manual campaigns
@@ -122,12 +124,12 @@ trigger/campaign/OTP
 
 - Consent + quota checks happen **in the worker at send time**, not at enqueue time (state may change in between).
 - Cron jobs (BullMQ repeatable): daily birthday scan (08:00 IST), daily segment recompute (03:00 IST), win-back evaluator (03:30 IST). All cron logic must be idempotent — running twice sends nothing twice (dedupe key: `{customerId}:{triggerType}:{date}` in message_logs).
-- BSP credentials per-platform (one WABA), messages sent on behalf of vendors from the platform number in v1; per-vendor numbers are a later feature. Template management (approval in Meta) is a super_admin manual task; templates stored in DB with variable slots.
-- **BSP rail ladder (docs/07 §6)**: v1 runs on a wholesale pass-through BSP (MSG91 or Gupshup — zero/near-zero markup); in parallel we file as a **Meta Tech Provider** (free, ~1–4 weeks: business verification → app review → Embedded Signup). Target architecture is **one WABA per vendor** (own display name, isolated quality rating/blast radius); the shared platform WABA is the stopgap. To make the migration a config change, `vendors` stores `whatsapp: { wabaId, phoneNumberId }` from day one (all rows point at the platform's in v1), and the worker tracks each customer's 24h service-window state so utility sends ride the free window (₹0) whenever it's open, logging window state per send for cost analytics.
+- **WABA architecture (GoKwik model)**: Cafes onboard their own WhatsApp Business Account via Meta Embedded Signup / Cloud API, displaying their own verified business name and isolating deliverability and quality ratings. Inbound webhooks route dynamically by `phoneNumberId` to the correct vendor.
+- Worker tracks each customer's 24h service-window state so utility sends (e-bills, status) ride the free window (₹0) whenever open, logging window state per send for cost analytics.
 
 ## 8. Real-time strategy
 
-- New order → after DB commit, emit `order:new` to `vendor:{vendorId}` room; status changes → `order:status` to `order:{orderId}` room.
+- Order & Session events: after DB commit, emit `order:new`, `order:status`, and `table:service_call` to `vendor:{vendorId}` room. For diners, emit `round:status` and `table:updated` to `session:{sessionToken}` room.
 - Socket emit failures never fail the HTTP request (fire-and-forget with logging).
 - Both dashboards also poll every 30s as belt-and-braces reconciliation (TanStack Query refetch) — the socket is a latency optimization, never the source of truth.
 
