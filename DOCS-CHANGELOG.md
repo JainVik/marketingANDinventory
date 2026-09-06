@@ -21,6 +21,9 @@ Folds HANDOVER.md, the v1 Final Cut (items 1–66) and the PostgreSQL decision i
 | `docs/15-system-architecture-blueprint.md` + `15-system-design.png/.svg` | **new** | Monorepo (Turborepo), api + worker processes, 10 BullMQ queues by fault domain, outbox, adapters/ports, Docker Compose → Fly/ECS, 2-hour extraction recipe, directory tree |
 | `db/migrations/0001_init.sql` | **new** | The schema (65 tables, 65 enums, RLS, partitions, triggers). Includes the funnel event types from doc 13 |
 | `db/seed/smoke.sql` | **new** | Proves RLS isolation, idempotency, guarded transitions, counters, partitions, append-only |
+| `docs/00-coverage.md` | **new** (6 Sep) | 66 rows: item → module → session → screens → docs/05 section → status; foundations checklist; misses log |
+| `docs/16-build-playbook.md` | **new** (6 Sep) | Session sequence S0–S14, session cards with doc refs + prompts, folder/naming rules, no-duplicate rules, miss handling, checkpoints, git |
+| `README.md`, `CLAUDE.md` | **edit** (6 Sep) | Point at 00 and 16 |
 | `docs/07`, `08`, `12`, `Regulars — v1 Final Cut.txt`, `v1-dataMaking.txt` | untouched | |
 
 Decisions folded 5 Sep (late): refund default = original payment mode (01 #45, 05 §4.9); move table confirmed v1, merge v1.1 (01 §4, §6).

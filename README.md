@@ -10,6 +10,7 @@ db/
 ├── migrations/0001_init.sql       ← the database (65 tables, RLS, partitions, triggers) — run this      [feed to AI]
 └── schema.ts                      ← GENERATED: `drizzle-kit pull` after migrating; do not hand-edit
 docs/
+├── 00-coverage.md                 ← the 66-row checklist: item → module → session → status (update every session)
 ├── 01-product-scope.md            ← WHAT v1 is: the numbered final cut 1–66, version ledger, dropped     [feed to AI]
 ├── 02-architecture.md             ← stack (Postgres/Supabase/Drizzle), monorepo, layers, RLS, rails      [feed to AI]
 ├── 03-database-schema.md          ← every table, index, policy, payload schema, scaling plan             [feed to AI]
@@ -26,7 +27,8 @@ docs/
 ├── 13-website-and-onboarding-funnel.md ← 10-page site, three signup doors, the wizard, go-live          [feed to AI]
 ├── 14-screen-specification.md     ← every screen, overlay and state; Figma planning                       [feed to AI]
 ├── 15-system-architecture-blueprint.md ← repo, processes, queues, fault domains, deploy, extraction        [feed to AI]
-└── 15-system-design.png / .svg    ← the system diagram
+├── 15-system-design.png / .svg    ← the system diagram
+└── 16-build-playbook.md           ← HOW we build: session order S0–S14, per-session prompts, folder/naming rules, misses [feed to AI]
 ```
 
 Docs 01–06, 11–15 + CLAUDE.md + `db/migrations` are the AI's binding contract. 07–09 are founder references (don't paste them into coding sessions). Doc 10 bridges both. Where 01 and 11 disagree, **01 (the final cut) wins**.
@@ -41,9 +43,9 @@ Docs 01–06, 11–15 + CLAUDE.md + `db/migrations` are the AI's binding contrac
    psql "$DATABASE_DIRECT_URL" -f db/seed/smoke.sql   # optional: proves RLS, counters, partitions
    ```
 3. Scaffold: > "Read CLAUDE.md and docs/02. Scaffold the monorepo exactly as specified — workspaces, apps/api bootstrap (loaders, middlewares, error handler, env config, db/client.ts with withTenant/asWorker), packages/shared with enums from db/schema.ts, error codes, zod schemas. No feature modules yet."
-4. Then **one module per session**, always pointing at the docs: > "Implement the orders module. Requirements: docs/01 §2 items 23–39, docs/03 §2b, docs/04 §5 + §9, docs/05 §2–3, docs/06 §4. Include the 🧪 tests and the tools registry entries."
+4. Then **one module per session**, in the order and with the prompts in `docs/16-build-playbook.md` §2–3. Example: > "Implement the orders module. Requirements: docs/01 §2 items 23–39, docs/03 §2b, docs/04 §5 + §9, docs/05 §2–3, docs/06 §4. Include the 🧪 tests and the tools registry entries."
 5. Build order (each step shippable): auth → vendors + wizard → menu → tables → sessions + orders (the hard one) → billing + payments → customers + consent → WhatsApp pipeline (queue, worker, webhook, conversations) → marketing (automations, campaigns, holdout, ledger) → insights + briefing → agents (tools registry, owner bot read-only) → admin → PWA polish → public site.
-6. After each module, run the self-review step at the bottom of CLAUDE.md and the test suite before moving on.
+6. After each module, run the self-review step at the bottom of CLAUDE.md, the test suite, and update `docs/00-coverage.md` (playbook §7) before moving on.
 
 ## Keeping the docs honest
 
@@ -55,6 +57,6 @@ Docs 01–06, 11–15 + CLAUDE.md + `db/migrations` are the AI's binding contrac
 
 - Meta India service-message rate card (1 Oct 2026 change) before pricing the free tier.
 - Lawyer: gateway / merchant-of-record structure; DPDP notice text. CA: e-invoice position.
-- Refund default per outlet type; offers-banner edge cases; move-table v1 or v1.1.
+- Offers-banner edge cases.
 - Sit in 10 restaurants and watch group ordering.
 - Pilot outlets (their menus become seed data).

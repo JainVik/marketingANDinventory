@@ -13,6 +13,7 @@ You are writing production code for **Regulars**: a multi-tenant QR ordering + W
 | `docs/13-website-and-onboarding-funnel.md` | Public site, signup, wizard |
 | `docs/14-screen-specification.md` | Building any screen — IDs, layouts, overlays, states |
 | `docs/15-system-architecture-blueprint.md` | Adding a process, queue, adapter or module; anything about fault isolation or deployment |
+| `docs/16-build-playbook.md` | Start of every session — which module, which docs, the folder/naming rules; update `docs/00-coverage.md` at the end |
 
 If a request conflicts with these docs, STOP and say so instead of silently diverging. If something is ambiguous, choose the option consistent with these docs and note the assumption in the PR description.
 
