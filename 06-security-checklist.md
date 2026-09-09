@@ -40,8 +40,21 @@ The integration suite contains a **tenant-leak matrix test**: for EVERY vendor-s
 - **Row-Level Security is the wall.** Every table with a `vendor_id` column has `FORCE ROW LEVEL SECURITY` and a generated policy keyed on `app.current_vendor_id()`; the API role `regulars_app` cannot bypass it. The leak-matrix test list is generated from `information_schema.columns WHERE column_name = 'vendor_id'` at test time, so a new table joins the gate on creation. 🧪🚦
 - `vendorId` always from JWT (tenantContext) into `withTenant()`; never from client input on `/vendor/*`. ESLint rules: no `req.*.vendorId` in vendor modules; no `db.` import in services (they take `tx`); no `asWorker()` outside `jobs/`.
 - Pooler discipline: transaction-mode pooling means `SET LOCAL` only — a plain `SET` would leak tenant context to the next request. Lint + a test that runs two tenants over one pooled connection. 🧪
-- Global `customers` table: readable only via the customer's own JWT (`app.customer_id`) or through the vendor's `customer_profiles` row (policy `customers_read`). 🧪
+- Global customer identity is not in `app` at all — see §4b. 🧪
 - Public projections: storefront endpoints select explicit column lists. A projection test asserts no `gateway_*`, `sub_*`, settings, or customer fields appear in public JSON. 🧪
+
+## 4b. Identity isolation — the PII wall (release gate 🚦)
+
+Tenancy stops vendor A reading vendor B. This stops **the application itself** reading the phone book. It is a Postgres privilege, not a code convention, so no forgotten filter can defeat it.
+
+- `regulars_app` holds **no table grant in schema `pii`**. Gate test: `SELECT * FROM pii.customers` as `regulars_app` must raise `42501`, and `has_table_privilege('regulars_app','pii.customers','SELECT')` must be false for every table in `pii`. Generated from `pg_tables WHERE schemaname='pii'`, so a new identity table joins the gate on creation. 🧪🚦
+- The only doors are the view `pii.customer_public` (no phone, no name) and `pii.reveal_identity()`. Both are enumerated in the gate; adding a third door requires editing this list. 🧪
+- **Reveal requires a prior order.** `pii.reveal_identity()` raises `42501` unless the calling vendor holds a `customer_profiles` row with `revealed_at IS NOT NULL`. Tested per-vendor: A having revealed customer X must not let B read X. 🧪🚦
+- Every reveal writes `audit_logs (action='customer.reveal')`. A vendor bulk-reading identities shows up as a rate spike on one action key — alert at 50 reveals/minute.
+- One connection pool, one module: `regulars_identity` may be imported only inside `modules/identity/`. ESLint `no-restricted-imports`, plus a test that greps the build output. 🧪
+- **Documented exceptions** (do not "fix" these): `bills.customer_phone`/`customer_name` — a GST invoice must name the buyer, and that customer ordered there by definition; `conversations.phone`, `messages.phone`, `messages.raw` — the sender needs a real number, so `regulars_app` gets a column-level grant that excludes them and the owner UI masks to `98•••••210`. A test asserts those three columns are absent from `regulars_app`'s privileges. 🧪
+- The lake never sees `pii`: the logical replication publication covers `app` and `ml` only, and CI fails if a `pii.*` table appears in `pg_publication_tables`. 🧪🚦
+- **`06-pii-wall-smoke.sql`** runs all of the above against a freshly migrated database. It is the executable form of this section — run it in CI after migrations, and treat any deviation as a release blocker. 🚦
 
 ## 5. Secrets, tokens, crypto
 
@@ -76,7 +89,7 @@ The integration suite contains a **tenant-leak matrix test**: for EVERY vendor-s
 - Node LTS only; `engines` pinned; lockfile committed; no postinstall-script packages added without review (`--ignore-scripts` in CI installs).
 - Docker: non-root user, distroless/slim base, read-only fs where possible.
 - CORS: exact-origin allowlist from env (the three frontend origins); credentials true only for auth paths; no `*`.
-- Postgres (Supabase): TLS required; three roles — `regulars_app` (RLS enforced, no DDL, no DELETE), `regulars_worker` (BYPASSRLS, jobs only), `regulars_ml` (read-only); migrations run with the direct URL under a separate migrator user; pooler URL at runtime. Network restrictions to API hosts where the plan allows.
+- Postgres (Supabase): TLS required; **four** roles — `regulars_app` (RLS enforced, no DDL, no DELETE, **no grant on `pii`**), `regulars_identity` (the only reader of `pii`, used by one pool in `modules/identity`), `regulars_worker` (BYPASSRLS, jobs only), `regulars_ml` (read-only, never granted `pii`); migrations run with the direct URL under a separate migrator user; pooler URL at runtime. Network restrictions to API hosts where the plan allows.
 
 ## 8. Privacy & data protection (India — DPDP Act awareness)
 
@@ -88,6 +101,9 @@ The integration suite contains a **tenant-leak matrix test**: for EVERY vendor-s
   - PII redaction in logs: pino redact paths for phone/name/birthday; request bodies never logged raw on auth/order/customer routes; `app.events.payload` carries no PII by contract (payload schemas are PII-free, tested). 🧪
   - Erasure path (`docs/03` §4.7): `customers` phone hashed + name/birthday nulled, `customer_profiles` PII nulled, `messages` content nulled, bill phone masked to last-4 (GST record), lake tombstones. `customer_consent_events` kept as evidence.
   - ML/lake export strips PII at the CDC boundary via a per-table column allowlist; free-text (bot input, message text) exported only where `ml.ai_feedback.training_eligible = true`.
+  - **Identity is physically separated inside the database** (schema `pii`, §4b): a compromised API credential yields orders and totals, never a phone book. Customer refresh tokens and device rows live there too, so an erasure signs every device out.
+  - **A vendor sees a person only after that person ordered with them** (item 67). Before that, browsing and visits are aggregates. This is a privacy property of the product, not only a feature — say it plainly in the customer notice.
+  - **Browse tracking** (item 68) records behaviour against a random device id with no fingerprinting, no free text and no search strings. It begins before the customer has identified themselves, so the **notice must cover it at the point of scan**, not at OTP. ⚠ Lawyer sign-off required before launch (`docs/01` §6). Unlinked visitors and their browse rows are deleted after 400 days; `browse_events` detail after 90.
   - Data lives in-region (Supabase Mumbai `ap-south-1`).
 - Disclaimer: DPDP compliance details (notices, grievance officer, etc.) need legal review before public launch — this doc covers engineering posture only.
 
@@ -105,3 +121,5 @@ The integration suite contains a **tenant-leak matrix test**: for EVERY vendor-s
 4. `.env.example` complete; boot fails on missing config (proven by a CI test).
 5. Load smoke: 50 concurrent order placements against staging with `limited` stock — zero oversells, zero duplicate orders, zero duplicate invoice numbers under 20 concurrent settles.
 6. `db/seed/smoke.sql` green against the migrated staging database (RLS, counters, partitions, append-only guards).
+7. **PII wall green** (§4b): `regulars_app` has zero privileges in schema `pii`; reveal-before-order raises 403; no `pii.*` table in the lake publication; `phone`/`raw` absent from `regulars_app`'s column grants on the WhatsApp ledger.
+8. Browse-tracking notice text signed off by the lawyer, and the telemetry endpoint proven non-blocking (an induced telemetry failure does not fail an order placement).

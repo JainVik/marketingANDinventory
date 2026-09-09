@@ -27,6 +27,7 @@ REST API for v1. Base path `/api/v1`. All request/response bodies are zod-valida
 |---|---|---|
 | 401 | `UNAUTHENTICATED` / `TOKEN_EXPIRED` | missing/invalid / expired access JWT |
 | 403 | `FORBIDDEN` | role fails, suspended vendor writes, feature not in plan (`details.feature`) |
+| 403 | `CUSTOMER_NOT_REVEALED` | vendor asked for a name/phone of a customer who has not ordered with them (item 67; raised by `pii.reveal_identity()`) |
 | 404 | `NOT_FOUND` | truly absent OR cross-tenant (RLS returns no row; never reveal existence) |
 | 409 | `CONFLICT_STATE` | invalid transition (returns `currentStatus`) |
 | 409 | `OUT_OF_STOCK` | guarded stock decrement failed (returns `itemIds`) |
@@ -54,6 +55,13 @@ POST /auth/signup             { name, email, password, phone, door: 'self' }   �
 POST /auth/refresh            (cookie)                               → { accessToken } + rotated cookie
 POST /auth/logout             (cookie)                               → revokes token family
 GET  /auth/me                                                        → { user | customer }
+
+# item 67 — sign in once, recognised at every outlet. Customer refresh = 180 days, rotating,
+# bound to a device row. Resume is the FIRST thing the PWA calls on any scan, before the menu.
+POST /auth/customer/resume    { visitorId? }  (cookie)               → { accessToken, customer } | 401 if no valid session
+GET  /me/devices                                                     → [{ id, label, lastSeenAt, current: boolean }]
+DELETE /me/devices/{id}                                              → revokes that device's token family
+POST /me/devices/label        { label }                              → names the current device
 PATCH /me                     { name?, birthday?: {day,month}, consent?: {...}, language? }   (customer)
 GET  /me/history?cursor=                                             → my visits across all Regulars outlets (#30)
 ```
@@ -67,6 +75,13 @@ GET  /o/{slug}                                        → outlet public profile,
 GET  /o/{slug}/menu                                   → categories + active items (+ availability, priceVersion, variants, addons)
 GET  /v/{slug}/t/{qrToken}                            → resolves table; returns/creates the active session for that table (dine_in) or a counter session (takeaway)
                                                         410 GONE if the token was regenerated
+                                                        also issues { visitorId, browseSessionId } when the client sends none (item 68)
+
+# item 68 — browse telemetry. No auth. Fire-and-forget: ALWAYS 202, never 4xx into the customer's console.
+# Not the outbox: written outside any order transaction; a failure here can never fail a placement.
+POST /v/{slug}/t/{qrToken}/telemetry  { visitorId, browseSessionId, flushedAt, events[] }  → 202 { }
+                                                        payload contract: docs/03 §3.4 · max 50 events/flush, 200/session
+                                                        rate limit 12 flushes/min per visitorId, 240/min per outlet
 ```
 
 ---
@@ -194,6 +209,25 @@ POST /bills/{id}/review              { stars, text? } → 201 { review, routing:
 | `GET /vendor/reports/revenue?range=&groupBy=` · `/kitchen-speed` · `/discounts-voids` · `/messaging-costs` | | `reports.*` |
 | `GET /vendor/briefings?cursor=` · `PATCH /vendor/briefings/settings` `{ enabled, at }` | (#56) | `briefings.*` |
 | `GET /vendor/reviews` · `POST …/{id}/reply` | (#60) | `reviews.*` |
+
+## 11b. Owner: identity reveal & browse insights (items 67, 68)
+
+```
+# The ONLY route that returns a customer's real name and phone. Backed by pii.reveal_identity():
+# 403 CUSTOMER_NOT_REVEALED unless this vendor has a profile with revealedAt set (i.e. they ordered here).
+# Audited on every call (audit_logs action 'customer.reveal').
+GET  /vendor/customers/{profileId}/identity                → { name, phone, birthday? }        tool: customer.identity.reveal
+
+# Everything else about a customer is phone-free and name-free until revealed.
+GET  /vendor/customers?segment=&cursor=                    → profiles; displayName null and phone absent where revealedAt is null
+
+# Browse & intent — aggregates only. Never returns a person who has not ordered here.
+GET  /vendor/insights/funnel?from=&to=                     → { scans, browsed, carted, identified, ordered, conversionPct }   tool: insights.funnel.get
+GET  /vendor/insights/items/attention?from=&to=            → [{ itemId, views, cartAdds, orders, viewToOrderPct }]            tool: insights.itemAttention.get
+GET  /vendor/insights/items/viewed-never-ordered?days=30   → [{ itemId, views, distinctVisitors }]  (item 57)                 tool: insights.viewedNeverOrdered.get
+```
+
+---
 
 ## 12. Owner bot (v1 read-only)
 

@@ -1,4 +1,4 @@
-# 00 — Coverage tracker (v1 Final Cut items 1–66 → module → session)
+# 00 — Coverage tracker (v1 Final Cut items 1–68 → module → session)
 
 Update this file after **every** Claude Code session. Status values: `todo` · `partial (what is missing)` · `done` · `moved v1.1`. At the end of session 14 every row must be `done` or `moved`. Rules for using it are in `docs/16-build-playbook.md` §6.
 
@@ -37,7 +37,7 @@ Session numbers are from the playbook (S0 scaffold … S14 polish + site). "Also
 | 27 | Cancellation request (if enabled) → owner decides | orders | S5 | | C14, O03 | §3 | todo |
 | 28 | Coupon code at checkout | billing | S6 | | C07 | §4 | todo |
 | 29 | First visit: e-bill on WhatsApp (consent moment); repeat: in-app | whatsapp | S9 | | C10 | §5, §6 | todo |
-| 30 | Customer history across outlets + add-to-home-screen | customers | S8 (history) | S14 (PWA prompt) | C15 | §5 | todo |
+| 30 | Customer history across outlets + add-to-home-screen | customers + identity | S8 (history) | S14 (PWA prompt) | C15, §12.1 | §5 | todo |
 | 31 | Order desk: New / Preparing / Ready + customer badge | orders | S5 | | O02, O03 | §3 | todo |
 | 32 | Loud persistent alert until accepted | orders (owner-web) | S5 | | O02 | §3 | todo |
 | 33 | Accept + ETA / preparing / ready / complete / reject presets | orders | S5 | | O02, O03 | §3 | todo |
@@ -69,7 +69,7 @@ Session numbers are from the playbook (S0 scaffold … S14 polish + site). "Also
 | 54 | Holdout on every campaign (20 %) | marketing | S10 | | O31 | §6 | todo |
 | 55 | Revenue ledger | marketing | S10 | | O33 | §6 | todo |
 | 56 | Morning WhatsApp briefing | insights + whatsapp | S11 | | O35, A03.9 | §7 | todo |
-| 57 | Menu conclusions + never-ordered list | insights | S11 | | O34 | — | todo |
+| 57 | Menu conclusions + viewed-but-never-ordered + never-viewed | insights | S11 | S4 (item 68 supplies the data) | O34 | §12.3 | todo |
 | 58 | Market-basket upsell suggestions | insights | S11 | | O34 | — | todo |
 | 59 | Kitchen speed by hour/day | insights | S11 | | O19 | — | todo |
 | 60 | Smart review routing (happy → Google v1.1, unhappy → private) | reviews | S8 | | C11, O36 | §5 | todo |
@@ -79,17 +79,24 @@ Session numbers are from the playbook (S0 scaffold … S14 polish + site). "Also
 | # | Item | Module | Session | Also | Screens | 05 § | Status |
 |---|---|---|---|---|---|---|---|
 | 61 | WhatsApp pipeline: queue, retries, DLQ, STOP, caps, dedupe, 24 h, 131049 | whatsapp + jobs | S9 | | O21, O41 | §6 | todo |
-| 62 | Admin panel + foundations: auth, RLS, sockets, events log, CI | events + admin + jobs | S0 | S13 (admin UI) | X01–X09 | §9, §11 | todo |
+| 62 | Admin panel + foundations: auth, RLS, **PII wall**, sockets, events log, CI | events + admin + jobs | S0 | S13 (admin UI) | X01–X09 | §9, §11 | todo |
 | 63 | Public site: 10 pages + mega-menu | site | S14 | | S01–S10 | — | todo |
 | 64 | Every owner action = `tools` registry entry | agents (`runTool`) + every module's `*.tools.ts` | S0 (skeleton) | every session; S12 verifies the seed is complete | — | §7 | todo |
 | 65 | Read-only owner bot on WhatsApp | agents | S12 | | O41, X05 | §7 | todo |
 | 66 | Auto-accept setting, conditional | orders (logic) + vendors (setting) | S5 | S2 (setting UI) | O39 | §3 | todo |
+| 67 | One identity everywhere; sign in once; reveal to vendor on first order | identity + auth (login) + customers (reveal) | S1 | S8 (reveal + book), S5a (reveal txn) | A01, C04, C15, O25, O26 | §12.1, §12.2 | todo |
+| 68 | Browse & intent tracking (scan → view → scroll → no order) | telemetry | S4 | S11 (funnel + item attention) | C01, C02, O01, O34 (+ funnel frame, reserved) | §12.3 | todo |
 
 ## Not items, but must exist (tick when done)
 
 | What | Session | Status |
 |---|---|---|
 | `withTenant` / `asWorker` + RLS leak test matrix (`docs/06 §4`) | S0 | todo |
+| Schema `pii` + `regulars_identity` role + second pool + PII-wall gate (`docs/06 §4b`) | S0 | todo |
+| `pii.customer_public` view + `pii.reveal_identity()` + reveal audit | S1 | todo |
+| Column-level grants excluding `phone`/`raw` on `conversations` + `messages` | S0 (grants), S9 (verify) | todo |
+| Browse partitions + 90/400-day retention job + browse-session sweeper | S4 (tables), S9 (crons) | todo |
+| Lake publication excludes `pii.*` (CI check) | S0 | todo |
 | Outbox: `app.events` writer + consumer skeleton | S0 | todo |
 | 10 BullMQ queues + worker process (`docs/15`) | S9 | todo |
 | Socket.IO namespaces (order desk live) | S5 | todo |

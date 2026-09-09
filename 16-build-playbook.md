@@ -18,19 +18,19 @@ How we go from an empty repo to 5 pilot outlets without losing track of what liv
 
 | Session | Week | Module(s) | Feeds (items from docs/01) | You can see at the end |
 |---|---|---|---|---|
-| S0 | 1 | Scaffold + foundations | 62, 64 skeleton | `GET /healthz`; tests run against real Postgres; RLS leak test passes |
-| S1 | 1 | `auth` | 1 | Owner signs up with OTP, gets JWT; refresh works |
+| S0 | 1 | Scaffold + foundations (incl. schema `pii`, the second pool, the PII-wall gate) | 62, 64 skeleton | `GET /healthz`; tests run against real Postgres; RLS leak test AND PII-wall gate pass |
+| S1 | 1 | `auth` + `identity` | 1, 67 | Owner signs up with OTP, gets JWT; a customer OTPs once and resumes on a second scan with no OTP |
 | S2 | 1 | `vendors` (outlet, wizard, settings, plan flags) | 2, 3, 4, 5, 6, 9, 66 setting | Wizard saves each step; settings screens work |
 | S3 | 2 | `menu` (CRUD, variants, availability, bulk, CSV import, preview, banner) | 10–13, 14 (CSV/Excel), 16, 17 | Menu editor + live phone preview |
-| S4 | 2 | `tables` + public storefront + customer browse | 18, 19, 20 (kind), 21, 22, 6 (practice table) | Scan a real QR → menu opens on a phone, cart works |
+| S4 | 2 | `tables` + public storefront + customer browse + `telemetry` | 18, 19, 20 (kind), 21, 22, 6 (practice table), 68 | Scan a real QR → menu opens on a phone, cart works; the scan-browse-leave trail lands in `browse_sessions` |
 | S5a | 3 | `sessions` + `orders` — customer side | 23, 25, 27, 24 (flow) | Place order → waiting screen → status updates |
 | S5b | 4 | `orders` — owner side + auto-accept + sockets | 31–36, 39, 66, 37 (grid) | Order desk with loud alert; accept → phone updates live |
 | S6 | 4 | `billing` (bills, invoice, coupons, comp, settle, day-close) | 26, 28, 37 (settle), 40–46 (non-gateway), 3 (gate) | Bill + GST invoice number; settle in cash/UPI |
 | S7 | 5 | `payments` (Razorpay + Cashfree adapters, webhooks, refunds) | 8, 23/24 (pay prompt), 40, 45 (gateway) | Pay via gateway test mode; webhook marks bill paid; refund back to source |
-| S8 | 5 | `customers` + `reviews` | 7 (import), 30 (history), 38, 48, 60 | Customer book fills from orders; Regulars Board shows who is seated |
+| S8 | 5 | `customers` + `reviews` (incl. reveal-on-first-order) | 7 (import), 30 (history), 38, 48, 60, 67 (reveal) | Customer book fills from orders; a customer who scanned but never ordered shows as a count, not a name |
 | S9 | 6 | `whatsapp` + `jobs` (queues, worker process, templates, STOP, crons) | 29, 61, 7 (opt-in ask), 12/39 (crons) | E-bill reaches a real phone; STOP works; DLQ visible |
 | S10 | 7 | `marketing` (automations, campaigns, holdout, ledger) + paywall | 51–55, 53 (send) | First campaign with holdout and lift; free plan hits upgrade sheet |
-| S11 | 7 | `insights` (briefing, lapsed wall, capture rate, dead hours, menu, kitchen speed, reports) | 47, 49, 50, 53 (detect), 56–59 | Morning briefing arrives on WhatsApp |
+| S11 | 7 | `insights` (briefing, lapsed wall, capture rate, dead hours, menu, kitchen speed, funnel, reports) | 47, 49, 50, 53 (detect), 56–59, 68 (funnel + viewed-never-ordered) | Morning briefing arrives on WhatsApp; the owner can see scans → orders and which items get looked at and skipped |
 | S12 | 8 | `agents` (tools seed check, owner bot, RAG) + AI menu import | 64 (verify), 65, 14 (photo/PDF), 15 | Ask the bot "kal ka sale?" and get an answer; photo → menu |
 | S13 | 8 | `admin` + exports + security pass | 62 (UI), 9 (export), docs/06 | Suspend a vendor; export a vendor's data |
 | S14 | 9 | PWA polish, `site`, deploy | 30 (A2HS), 63, docs/09 | Pilots can scan, order, pay, get e-bill on production |
@@ -52,10 +52,11 @@ Every card has the same four lines. Copy the prompt, change nothing but the modu
 - **Not:** any feature module, any screen
 - **Prompt:** "Read CLAUDE.md and docs/02. Scaffold the monorepo exactly as docs/15 §5. Include db/client.ts with withTenant/asWorker per docs/03 §2b.1, packages/shared per docs/02 §2, the events outbox writer, the runTool skeleton, the Vitest+Supertest harness against the docker-compose Postgres with migrations applied, and the tenant-leak test from docs/06 §4. No feature modules, no frontend apps beyond empty Vite shells."
 
-### S1 — `auth`
+### S1 — `auth` + `identity`
 
-- **Reads:** docs/01 #1, docs/04 §3, docs/05 §1, docs/06 §2–3, docs/14 SCR-A01, A02, O46 (shell only)
-- **Builds:** OTP request/verify, email+password login, refresh, `tenantContext`, owner-web login screens
+- **Reads:** docs/01 #1, #67, docs/02 §4b, docs/03 §0 (PII boundary) + §2.10, docs/04 §3, docs/05 §1 + §12.1–12.2, docs/06 §2–3 + §4b, docs/14 SCR-A01, A02, O46 (shell only)
+- **Builds:** OTP request/verify, email+password login, refresh, `tenantContext`, owner-web login screens, **the `identity` module and its `regulars_identity` pool**, customer device sessions + 180-day rotating refresh, `/auth/customer/resume`, `/me/devices`
+- **Do not:** grant `regulars_app` anything in `pii`, or import the identity pool anywhere but `modules/identity/`. The gate in docs/06 §4b must be green at the end of this session.
 - **Prompt:** "Implement the `auth` module only. Requirements: docs/01 item 1, docs/04 §3, docs/05 §1, docs/06 §2–3, screens SCR-A01, A02 in docs/14. Follow the module shape in docs/02 §3. Tests, tools entries, events included. Before writing any helper, search packages/shared and apps/api/src/shared and tell me what you found. Do not touch other modules. End with the CLAUDE.md self-review and list which docs/05 cases you handled and which remain."
 
 ### S2 — `vendors`
@@ -72,8 +73,9 @@ Every card has the same four lines. Copy the prompt, change nothing but the modu
 
 ### S4 — `tables` + storefront
 
-- **Reads:** docs/01 #18–22; docs/03 §2.3; docs/04 §4, §8; docs/05 §9; docs/14 SCR-O10, A03.3, C01–C03, C17, C18
-- **Builds:** tables, tokens, QR PDF, regenerate, public storefront routes (explicit filters, no tenant middleware), customer-web menu/item/cart
+- **Reads:** docs/01 #18–22, #68; docs/03 §2.3, §2.10, §3.4; docs/04 §4, §8; docs/05 §9, §12.3; docs/14 SCR-O10, A03.3, C01–C03, C17, C18
+- **Builds:** tables, tokens, QR PDF, regenerate, public storefront routes (explicit filters, no tenant middleware), customer-web menu/item/cart, **the `telemetry` module**: visitor issue, beacon ingest, browse session sweeper, client batching
+- **Do not:** put a browse write inside an order transaction or through `app.events`. Prove it: an induced telemetry failure must leave placement green (docs/05 §12.3 case 14).
 
 ### S5a — `sessions` + `orders` (customer side)
 
